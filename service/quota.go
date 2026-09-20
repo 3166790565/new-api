@@ -229,6 +229,10 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 	if err := SettleBilling(ctx, relayInfo, quota); err != nil {
 		logger.LogError(ctx, "error settling billing: "+err.Error())
 	}
+	// Realtime requests settle through the same path as every other relay, so
+	// the contributed-channel payout must run here too. Settle is a no-op when
+	// there is nothing to adjust; the payout is guarded internally.
+	AwardContributionShare(ctx, relayInfo, quota)
 
 	logModel := modelName
 	if extraContent != "" {

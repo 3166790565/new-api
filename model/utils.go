@@ -19,6 +19,7 @@ const (
 	BatchUpdateTypeUsedQuota
 	BatchUpdateTypeChannelUsedQuota
 	BatchUpdateTypeRequestCount
+	BatchUpdateTypeUserContributionQuota
 	BatchUpdateTypeCount // if you add a new type, you need to add a new map and a new lock
 )
 
@@ -108,8 +109,9 @@ func batchUpdate() {
 	userQuotaStore := stores[BatchUpdateTypeUserQuota]
 	usedQuotaStore := stores[BatchUpdateTypeUsedQuota]
 	requestCountStore := stores[BatchUpdateTypeRequestCount]
+	contributionQuotaStore := stores[BatchUpdateTypeUserContributionQuota]
 
-	userIDs := make(map[int]struct{}, len(userQuotaStore)+len(usedQuotaStore)+len(requestCountStore))
+	userIDs := make(map[int]struct{}, len(userQuotaStore)+len(usedQuotaStore)+len(requestCountStore)+len(contributionQuotaStore))
 	for key := range userQuotaStore {
 		userIDs[key] = struct{}{}
 	}
@@ -119,7 +121,15 @@ func batchUpdate() {
 	for key := range requestCountStore {
 		userIDs[key] = struct{}{}
 	}
+	for key := range contributionQuotaStore {
+		userIDs[key] = struct{}{}
+	}
 	for key := range userIDs {
+		if delta, ok := contributionQuotaStore[key]; ok && delta != 0 {
+			if err := increaseContributionQuota(key, delta); err != nil {
+				common.SysLog("failed to batch update user contribution quota: " + err.Error())
+			}
+		}
 		updateUserQuotaUsedQuotaAndRequestCount(key, userQuotaStore[key], usedQuotaStore[key], requestCountStore[key])
 	}
 	common.SysLog("batch update finished")

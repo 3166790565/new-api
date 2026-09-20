@@ -74,11 +74,13 @@ func (s *BillingSession) Settle(actualQuota int) error {
 				s.relayInfo.UserId, s.relayInfo.TokenId, delta, tokenErr.Error()))
 		}
 	}
-	// 3) 更新 relayInfo 上的订阅 PostDelta（用于日志）
-	if s.funding.Source() == BillingSourceSubscription {
-		s.relayInfo.SubscriptionPostDelta += int64(delta)
+	// 4) 资金来源已提交，本次请求对调用方的扣费已经定案：现在结算贡献分成。
+	// BillingSession.Settle 可被调用超过一次（显式补差、重试），AwardContributionShare
+	// 内部以 relayInfo.ContributionShareAwarded 为幂等闸，绝不会重复入账。
+	if s.relayInfo.FinalPreConsumedQuota >= 0 {
+		AwardContributionShare(nil, s.relayInfo, actualQuota)
 	}
-	s.settled = true
+
 	return tokenErr
 }
 

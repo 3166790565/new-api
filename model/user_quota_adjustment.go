@@ -6,6 +6,8 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/shopspring/decimal"
+
+	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
 )
 
@@ -84,4 +86,97 @@ func AdjustUserQuota(userID, operatorRole int, mode string, value int) (*UserQuo
 		}
 	}
 	return &adjustment, nil
+}
+
+// IncreaseContributionQuota credits a contributor's share balance. It mirrors
+// IncreaseUserQuota: the update is bounded by MaxWalletQuota in the WHERE clause
+// so a saturated credit cannot wrap, and the committed delta is applied to the
+// user cache so the balance is immediately visible without waiting for the hash
+// to expire.
+func IncreaseContributionQuota(userId int, quota int, db bool) error {
+	if quota < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if quota == 0 {
+		return nil
+	}
+	if err := common.ValidateWalletQuota(quota); err != nil {
+		return err
+	}
+	if !db && common.BatchUpdateEnabled {
+		addNewRecord(BatchUpdateTypeUserContributionQuota, userId, quota)
+		return nil
+	}
+	return increaseContributionQuota(userId, quota)
+}
+
+func increaseContributionQuota(userId int, quota int) error {
+	result := DB.Model(&User{}).
+		Where("id = ? AND contribution_quota <= ?", userId, common.MaxWalletQuota-quota).
+		Update("contribution_quota", gorm.Expr("contribution_quota + ?", quota))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrWalletQuotaLimitExceeded
+	}
+	gopool.Go(func() {
+		if err := cacheIncrUserContributionQuota(userId, int64(quota)); err != nil {
+			common.SysLog("failed to increase user contribution quota: " + err.Error())
+		}
+	})
+	return nil
+}
+
+// DecreaseContributionQuota debits a contributor's share balance only when it
+// covers the requested amount, so a transfer can never overdraw it.
+func DecreaseContributionQuota(userId int, quota int) error {
+	if quota <= 0 {
+		return errors.New("quota must be positive")
+	}
+	result := DB.Model(&User{}).
+		Where("id = ? AND contribution_quota >= ?", userId, quota).
+		Update("contribution_quota", gorm.Expr("contribution_quota - ?", quota))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return errors.New("贡献余额不足")
+	}
+	gopool.Go(func() {
+		if err := cacheIncrUserContributionQuota(userId, -int64(quota)); err != nil {
+			common.SysLog("failed to decrease user contribution quota: " + err.Error())
+		}
+	})
+	return nil
+}
+
+// TransferContributionQuotaToQuota moves contribution earnings into the user's
+// spendable wallet quota. Contributions are already bounded by MaxWalletQuota,
+// so the sum still fits the wallet bound; the wallet side is checked against it
+// explicitly.
+func (user *User) TransferContributionQuotaToQuota(quota int) error {
+	if quota <= 0 {
+		return errors.New("转移额度必须大于 0！")
+	}
+	if err := common.ValidateWalletQuota(quota); err != nil {
+		return err
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).First(user, user.Id).Error; err != nil {
+			return err
+		}
+		if user.ContributionQuota < quota {
+			return errors.New("贡献余额不足！")
+		}
+		if err := common.ValidateWalletQuota(user.Quota + quota); err != nil {
+			return err
+		}
+		user.ContributionQuota -= quota
+		user.Quota += quota
+		if err := tx.Save(user).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }

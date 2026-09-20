@@ -102,6 +102,8 @@ type User struct {
 	AffCount             int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota             int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
 	AffHistoryQuota      int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
+	ContributionQuota    int                        `json:"contribution_quota" gorm:"type:int;default:0;column:contribution_quota"`
+	ContributionSharePercent *int                    `json:"contribution_share_percent" gorm:"type:int;column:contribution_share_percent"` // nil 时继承全局默认分成比例
 	InviterId            int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
 	DeletedAt            gorm.DeletedAt             `gorm:"index"`
 	LinuxDOId            string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`

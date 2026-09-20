@@ -53,6 +53,11 @@ type Channel struct {
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
+	// ContributionId links this channel to the user contribution from which it
+	// was materialized, so the share payout can find the contributor on the
+	// relay hot path without a join. 0 means this is a regular admin channel.
+	ContributionId int `json:"contribution_id" gorm:"index;default:0"`
+
 	OtherSettings string `json:"settings" gorm:"column:settings"` // 其他设置，存储azure版本等不需要检索的信息，详见dto.ChannelOtherSettings
 
 	// cache info
