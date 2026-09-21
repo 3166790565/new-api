@@ -67,6 +67,23 @@ redemption.failed: "兌換失敗，請稍後重試"
 redemption.not_provided: "未提供兌換碼"
 redemption.expire_time_invalid: "過期時間不能早於當前時間"
 
+# Registration code messages
+registration_code.required: "註冊需要提供註冊碼"
+registration_code.invalid: "無效的註冊碼"
+registration_code.disabled: "該註冊碼已被停用"
+registration_code.expired: "該註冊碼已過期"
+registration_code.exhausted: "該註冊碼已用完"
+registration_code.consume_failed: "註冊碼消費失敗，請稍後重試"
+registration_code.name_length: "註冊碼名稱長度必須在1-64之間"
+registration_code.count_positive: "註冊碼個數必須大於0"
+registration_code.count_max: "一次註冊碼批量生成的個數不能大於 500"
+registration_code.create_failed: "建立註冊碼失敗，請稍後重試"
+registration_code.length_invalid: "註冊碼長度必須在4-32之間"
+registration_code.charset_invalid: "無效的註冊碼字元集"
+registration_code.max_uses_invalid: "註冊碼使用次數上限不能為負數"
+registration_code.invalid_params: "無效的註冊碼生成參數"
+registration_code.expire_time_invalid: "過期時間不能早於當前時間"
+
 # User messages
 user.password_login_disabled: "管理員關閉了密碼登錄"
 user.register_disabled: "管理員關閉了新使用者註冊"

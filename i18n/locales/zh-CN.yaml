@@ -67,6 +67,23 @@ redemption.failed: "兑换失败，请稍后重试"
 redemption.not_provided: "未提供兑换码"
 redemption.expire_time_invalid: "过期时间不能早于当前时间"
 
+# Registration code messages
+registration_code.required: "注册需要提供注册码"
+registration_code.invalid: "无效的注册码"
+registration_code.disabled: "该注册码已被禁用"
+registration_code.expired: "该注册码已过期"
+registration_code.exhausted: "该注册码已用完"
+registration_code.consume_failed: "注册码消费失败，请稍后重试"
+registration_code.name_length: "注册码名称长度必须在1-64之间"
+registration_code.count_positive: "注册码个数必须大于0"
+registration_code.count_max: "一次注册码批量生成的个数不能大于 500"
+registration_code.create_failed: "创建注册码失败，请稍后重试"
+registration_code.length_invalid: "注册码长度必须在4-32之间"
+registration_code.charset_invalid: "无效的注册码字符集"
+registration_code.max_uses_invalid: "注册码使用次数上限不能为负数"
+registration_code.invalid_params: "无效的注册码生成参数"
+registration_code.expire_time_invalid: "过期时间不能早于当前时间"
+
 # User messages
 user.password_login_disabled: "管理员关闭了密码登录"
 user.register_disabled: "管理员关闭了新用户注册"

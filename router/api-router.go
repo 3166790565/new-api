@@ -308,6 +308,19 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
 		}
+
+		registrationCodeRoute := apiRouter.Group("/registration_code")
+		registrationCodeRoute.Use(middleware.AdminAuth())
+		{
+			registrationCodeRoute.GET("/", controller.GetAllRegistrationCodes)
+			registrationCodeRoute.GET("/search", controller.SearchRegistrationCodes)
+			registrationCodeRoute.GET("/:id", controller.GetRegistrationCode)
+			registrationCodeRoute.POST("/", controller.AddRegistrationCode)
+			registrationCodeRoute.POST("/batch", controller.DeleteRegistrationCodeBatch)
+			registrationCodeRoute.PUT("/", controller.UpdateRegistrationCode)
+			registrationCodeRoute.DELETE("/invalid", controller.DeleteInvalidRegistrationCode)
+			registrationCodeRoute.DELETE("/:id", controller.DeleteRegistrationCode)
+		}
 		apiRouter.GET("/audit", middleware.DisableCache(), middleware.AdminAuth(), middleware.RequirePermission(authz.AuditRead), controller.GetAuditLogs)
 		apiRouter.GET("/audit/self", middleware.DisableCache(), middleware.UserAuth(), controller.GetAuditLogs)
 		logRoute := apiRouter.Group("/log")

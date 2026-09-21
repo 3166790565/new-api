@@ -153,6 +153,11 @@ export function useSidebarData(): SidebarData {
             icon: Ticket,
           },
           {
+            title: t('Registration Codes'),
+            url: '/registration-codes',
+            icon: Ticket,
+          },
+          {
             title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,

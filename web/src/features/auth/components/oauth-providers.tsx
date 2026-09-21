@@ -39,6 +39,8 @@ type OAuthProvidersProps = {
   onWeChatLogin?: () => void
   isWeChatLoading?: boolean
   redirectTo?: string
+  registrationCodeRequired?: boolean
+  registrationCode?: string
 }
 
 type ProviderButton = {
@@ -56,6 +58,8 @@ export function OAuthProviders({
   onWeChatLogin,
   isWeChatLoading = false,
   redirectTo,
+  registrationCodeRequired = false,
+  registrationCode,
 }: OAuthProvidersProps) {
   const { t } = useTranslation()
   const {
@@ -72,7 +76,8 @@ export function OAuthProviders({
 
   const providerButtons: ProviderButton[] = []
 
-  if (status?.wechat_login && onWeChatLogin) {
+  // 注册码开启时，微信旧式建号路径无法收集注册码，隐藏微信登录按钮。
+  if (status?.wechat_login && onWeChatLogin && !registrationCodeRequired) {
     providerButtons.push({
       key: 'wechat',
       label: t('Continue with WeChat'),
@@ -86,7 +91,7 @@ export function OAuthProviders({
     providerButtons.push({
       key: 'github',
       label: githubButtonText || t('Continue with GitHub'),
-      onClick: handleGitHubLogin,
+      onClick: () => handleGitHubLogin(registrationCode),
       icon: <IconGithub className='h-4 w-4' />,
       disabled: githubButtonDisabled,
     })
@@ -96,7 +101,7 @@ export function OAuthProviders({
     providerButtons.push({
       key: 'discord',
       label: t('Continue with Discord'),
-      onClick: handleDiscordLogin,
+      onClick: () => handleDiscordLogin(registrationCode),
       icon: <IconDiscord className='h-4 w-4' />,
     })
   }
@@ -108,7 +113,7 @@ export function OAuthProviders({
       label: t('Continue with {{name}}', {
         name: oidcDisplayName,
       }),
-      onClick: handleOIDCLogin,
+      onClick: () => handleOIDCLogin(registrationCode),
     })
   }
 
@@ -116,7 +121,7 @@ export function OAuthProviders({
     providerButtons.push({
       key: 'linuxdo',
       label: t('Continue with LinuxDO'),
-      onClick: handleLinuxDOLogin,
+      onClick: () => handleLinuxDOLogin(registrationCode),
       icon: <IconLinuxDo className='h-4 w-4' />,
     })
   }
@@ -125,7 +130,7 @@ export function OAuthProviders({
     providerButtons.push({
       key: 'telegram',
       label: t('Continue with Telegram'),
-      onClick: handleTelegramLogin,
+      onClick: () => handleTelegramLogin(registrationCode),
       icon: <IconTelegram data-icon='inline-start' />,
     })
   }
@@ -137,7 +142,7 @@ export function OAuthProviders({
       providerButtons.push({
         key: `custom-${provider.slug}`,
         label: t('Continue with {{name}}', { name: provider.name }),
-        onClick: () => handleCustomOAuthLogin(provider),
+        onClick: () => handleCustomOAuthLogin(provider, registrationCode),
       })
     }
   }

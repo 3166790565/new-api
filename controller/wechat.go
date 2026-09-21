@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -93,6 +94,15 @@ func WeChatAuth(c *gin.Context) {
 		}
 	} else {
 		if common.RegisterEnabled {
+			// 注册码开启时，微信旧式建号路径没有可收集用户输入注册码的通道，
+			// 因此拒绝新账号创建并明确提示（已有微信账号登录不受影响）。
+			if common.RegistrationCodeEnabled {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": i18n.T(c, i18n.MsgRegistrationCodeRequired),
+				})
+				return
+			}
 			user.Username = "wechat_" + strconv.Itoa(model.GetMaxUserId()+1)
 			user.DisplayName = "WeChat User"
 			user.Role = common.RoleCommonUser

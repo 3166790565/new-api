@@ -432,7 +432,7 @@ it('passes an enrollment operation through OAuth state creation', async () => {
     data: { success: true, data: { flow_token: 'oauth-flow' } },
   })
   await expect(
-    createOAuthFlow('github', 'verify', {
+    createOAuthFlow('github', 'verify', undefined, {
       scope: 'passkey.register',
       context: {},
     })

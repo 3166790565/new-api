@@ -33,6 +33,13 @@ type LoginRequest struct {
 	EncryptionKeyID   string `json:"encryption_key_id"`
 }
 
+// registerRequest 是注册请求的 DTO。registration_code 只存在于请求层，
+// 不写入 users 表，保证旧数据库升级时无需新增任何用户表列。
+type registerRequest struct {
+	model.User
+	RegistrationCode string `json:"registration_code"`
+}
+
 func GetPasswordEncryptionKey(c *gin.Context) {
 	if !common.PasswordLoginEncryptionEnabled {
 		common.ApiSuccess(c, gin.H{"enabled": false})
@@ -223,17 +230,30 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordRegisterDisabled)
 		return
 	}
-	var user model.User
-	err := common.DecodeJson(c.Request.Body, &user)
+	var req registerRequest
+	err := common.DecodeJson(c.Request.Body, &req)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	user := req.User
 	user.Username = strings.TrimSpace(user.Username)
 	user.Email = model.NormalizeEmail(user.Email)
 	if user.Username == "" {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
+	}
+	if common.RegistrationCodeEnabled {
+		regCode := model.NormalizeRegistrationCodeValue(req.RegistrationCode)
+		if regCode == "" {
+			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeRequired)
+			return
+		}
+		// 只读校验，让无效码软失败；真正的原子扣减在建号后执行。
+		if err := model.CheckRegistrationCodeUsable(regCode); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeInvalid)
+			return
+		}
 	}
 	if err := common.Validate.Struct(&user); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
@@ -297,6 +317,19 @@ func Register(c *gin.Context) {
 	if err := model.DB.Where("username = ?", cleanUser.Username).First(&insertedUser).Error; err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
 		return
+	}
+	// 原子消费注册码。只读校验已通过，理论上不会失败；若失败（例如并发下
+	// 同一码被同时用尽），记录补偿审计供运维对账，不自动删除已建用户。
+	if common.RegistrationCodeEnabled {
+		rcID, _, consumeErr := model.ConsumeRegistrationCode(req.RegistrationCode)
+		if consumeErr != nil {
+			recordUserSecurityAudit(c, insertedUser.Id, "registration_code.consume_failed_after_account_created", map[string]any{
+				"success":              false,
+				"registration_code_id": rcID,
+			})
+			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeConsumptionFailed)
+			return
+		}
 	}
 	// 生成默认令牌
 	if constant.GenerateDefaultToken {

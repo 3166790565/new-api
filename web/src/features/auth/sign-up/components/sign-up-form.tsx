@@ -100,6 +100,9 @@ export function SignUpForm({
 
   const emailValue = form.watch('email')
   const emailVerificationRequired = !!status?.email_verification
+  const registrationCodeRequired = Boolean(
+    status?.registration_code_enabled
+  )
   const hasUserAgreement = Boolean(status?.user_agreement_enabled)
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
@@ -157,6 +160,12 @@ export function SignUpForm({
       }
     }
 
+    // Validate registration code if required
+    if (registrationCodeRequired && !data.registration_code?.trim()) {
+      toast.error(t('A registration code is required to create an account'))
+      return
+    }
+
     if (!validateTurnstile()) return
 
     setIsLoading(true)
@@ -167,6 +176,7 @@ export function SignUpForm({
         email: data.email || undefined,
         verification_code: verificationCode || undefined,
         aff_code: getAffiliateCode(),
+        registration_code: data.registration_code || undefined,
         turnstile: turnstileToken,
       })
 
@@ -284,6 +294,29 @@ export function SignUpForm({
           )}
         />
 
+        {/* Registration Code Field */}
+        {registrationCodeRequired && (
+          <FormField
+            control={form.control}
+            name='registration_code'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  {t('Registration code (required)')}
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={t('Enter your registration code')}
+                    autoComplete='off'
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
         {/* Confirm Password Field */}
         <FormField
           control={form.control}
@@ -388,6 +421,12 @@ export function SignUpForm({
             disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
             onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
             isWeChatLoading={isWeChatSubmitting}
+            registrationCodeRequired={registrationCodeRequired}
+            registrationCode={
+              registrationCodeRequired
+                ? form.getValues('registration_code')
+                : undefined
+            }
             className='pt-2'
           />
         )}

@@ -66,6 +66,23 @@ redemption.failed: "Redemption failed, please try again later"
 redemption.not_provided: "Redemption code not provided"
 redemption.expire_time_invalid: "Expiration time cannot be earlier than current time"
 
+# Registration code messages
+registration_code.required: "A registration code is required to create an account"
+registration_code.invalid: "Invalid registration code"
+registration_code.disabled: "This registration code has been disabled"
+registration_code.expired: "This registration code has expired"
+registration_code.exhausted: "This registration code has been used up"
+registration_code.consume_failed: "Registration code could not be redeemed, please try again later"
+registration_code.name_length: "Registration code name length must be between 1-64"
+registration_code.count_positive: "Registration code count must be greater than 0"
+registration_code.count_max: "Maximum 500 registration codes can be generated at once"
+registration_code.create_failed: "Failed to create registration code, please try again later"
+registration_code.length_invalid: "Registration code length must be between 4-32"
+registration_code.charset_invalid: "Invalid registration code charset"
+registration_code.max_uses_invalid: "Registration code max uses must not be negative"
+registration_code.invalid_params: "Invalid registration code generation parameters"
+registration_code.expire_time_invalid: "Expiration time cannot be earlier than current time"
+
 # User messages
 user.password_login_disabled: "Password login has been disabled by administrator"
 user.register_disabled: "New user registration has been disabled by administrator"

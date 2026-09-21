@@ -23,19 +23,21 @@ import (
 const oauthAuthFlowTTL = 10 * time.Minute
 
 type oauthStateRequest struct {
-	Provider string          `json:"provider"`
-	Intent   string          `json:"intent"`
-	Aff      string          `json:"aff,omitempty"`
-	Scope    string          `json:"scope,omitempty"`
-	Context  json.RawMessage `json:"context,omitempty"`
+	Provider         string          `json:"provider"`
+	Intent           string          `json:"intent"`
+	Aff              string          `json:"aff,omitempty"`
+	Scope            string          `json:"scope,omitempty"`
+	Context          json.RawMessage `json:"context,omitempty"`
+	RegistrationCode string          `json:"registration_code,omitempty"`
 }
 
 type oauthFlowPayload struct {
-	AffiliateCode   string                         `json:"affiliate_code,omitempty"`
-	Verification    *service.OAuthVerificationFlow `json:"verification,omitempty"`
-	Telegram        *oauth.TelegramOAuthFlow       `json:"telegram,omitempty"`
-	SessionIdentity *service.AuthIdentity          `json:"session_identity,omitempty"`
-	Authorization   *model.AuthFlowAuthorization   `json:"authorization,omitempty"`
+	AffiliateCode    string                         `json:"affiliate_code,omitempty"`
+	Verification     *service.OAuthVerificationFlow `json:"verification,omitempty"`
+	Telegram         *oauth.TelegramOAuthFlow       `json:"telegram,omitempty"`
+	SessionIdentity  *service.AuthIdentity          `json:"session_identity,omitempty"`
+	Authorization    *model.AuthFlowAuthorization   `json:"authorization,omitempty"`
+	RegistrationCode string                         `json:"registration_code,omitempty"`
 }
 
 // providerParams returns map with Provider key for i18n templates
@@ -61,9 +63,22 @@ func GenerateOAuthCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	// 注册码开启时，OAuth 登录（意图 login，可能首次建号）必须在发起时携带注册码，
+	// 否则回调阶段无请求体可取码。
+	if common.RegistrationCodeEnabled && request.Intent == model.AuthFlowIntentLogin {
+		regCode := model.NormalizeRegistrationCodeValue(request.RegistrationCode)
+		if regCode == "" {
+			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeRequired)
+			return
+		}
+		if err := model.CheckRegistrationCodeUsable(regCode); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeInvalid)
+			return
+		}
+	}
 	userID := 0
 	sessionID := ""
-	flowPayload := oauthFlowPayload{AffiliateCode: request.Aff}
+	flowPayload := oauthFlowPayload{AffiliateCode: request.Aff, RegistrationCode: model.NormalizeRegistrationCodeValue(request.RegistrationCode)}
 	bindingStarted := false
 	if request.Provider == "telegram" {
 		telegramFlow, err := oauth.NewTelegramOAuthFlow()
@@ -322,7 +337,7 @@ func handleOAuthLogin(c *gin.Context, provider oauth.Provider, oauthUser *oauth.
 		writeSecurityOperationError(c, err)
 		return
 	}
-	user, migration, err := findOrCreateOAuthUser(c, provider, oauthUser, token, payload.AffiliateCode)
+	user, migration, err := findOrCreateOAuthUser(c, provider, oauthUser, token, payload.AffiliateCode, payload.RegistrationCode)
 	if err != nil {
 		if errors.Is(err, model.ErrEmailAlreadyTaken) {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
@@ -406,7 +421,7 @@ func handleOAuthBind(c *gin.Context, providerName string, provider oauth.Provide
 // findOrCreateOAuthUser finds the existing user or creates a new one. For a
 // legacy GitHub binding that still waits for the login verification, it also
 // returns the rewrite to carry into the challenge.
-func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *oauth.OAuthUser, token *oauth.OAuthToken, affiliateCode string) (*model.User, *service.LegacyGitHubMigration, error) {
+func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *oauth.OAuthUser, token *oauth.OAuthToken, affiliateCode string, registrationCode string) (*model.User, *service.LegacyGitHubMigration, error) {
 	user := &model.User{}
 	if provider.ProviderUserIDColumn() == "telegram_id" {
 		err := provider.FillUserByProviderID(user, oauthUser.ProviderUserID)
@@ -489,6 +504,17 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	if !common.RegisterEnabled {
 		return nil, nil, &OAuthRegistrationDisabledError{}
 	}
+	// 注册码开启时，OAuth 首次建号也必须持有有效注册码。码由用户在注册页填写后
+	// 随 /api/oauth/state 传入 flow payload；回调阶段无请求体，只能在这里校验。
+	if common.RegistrationCodeEnabled {
+		regCode := model.NormalizeRegistrationCodeValue(registrationCode)
+		if regCode == "" {
+			return nil, nil, &OAuthRegistrationCodeRequiredError{}
+		}
+		if err := model.CheckRegistrationCodeUsable(regCode); err != nil {
+			return nil, nil, &OAuthRegistrationCodeInvalidError{err}
+		}
+	}
 
 	// Set up new user
 	user.Username = provider.GetProviderPrefix() + strconv.Itoa(model.GetMaxUserId()+1)
@@ -527,6 +553,17 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		inviterId, _ = model.GetUserIdByAffCode(affiliateCode)
 	}
 
+	// 注册码开启时，在建号前原子消费。OAuth 是多跳流程，回调阶段无法在建号
+	// 之后补消费；若消费成功但建号失败，写补偿审计供运维对账。
+	consumedRcID := 0
+	if common.RegistrationCodeEnabled {
+		rcID, _, err := model.ConsumeRegistrationCode(registrationCode)
+		if err != nil {
+			return nil, nil, &OAuthRegistrationCodeInvalidError{err}
+		}
+		consumedRcID = rcID
+	}
+
 	// Use transaction to ensure user creation and OAuth binding are atomic
 	if genericProvider, ok := provider.(*oauth.GenericOAuthProvider); ok {
 		// Custom provider: create user and binding in a transaction
@@ -549,6 +586,9 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 			return nil
 		})
 		if err != nil {
+			if consumedRcID > 0 {
+				recordOAuthRegistrationCodeCompensation(c, consumedRcID, "oauth_user_create_failed")
+			}
 			return nil, nil, err
 		}
 
@@ -578,6 +618,9 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 			return nil
 		})
 		if err != nil {
+			if consumedRcID > 0 {
+				recordOAuthRegistrationCodeCompensation(c, consumedRcID, "oauth_user_create_failed")
+			}
 			return nil, nil, err
 		}
 
@@ -611,6 +654,37 @@ func (e *OAuthRegistrationDisabledError) Error() string {
 	return "registration is disabled"
 }
 
+type OAuthRegistrationCodeRequiredError struct{}
+
+func (e *OAuthRegistrationCodeRequiredError) Error() string {
+	return "a registration code is required"
+}
+
+type OAuthRegistrationCodeInvalidError struct {
+	Err error
+}
+
+func (e *OAuthRegistrationCodeInvalidError) Error() string {
+	return "invalid registration code: " + e.Err.Error()
+}
+
+func (e *OAuthRegistrationCodeInvalidError) Unwrap() error { return e.Err }
+
+// recordOAuthRegistrationCodeCompensation 记录 OAuth 建号失败时已消费注册码的补偿审计，
+// 供运维对账。不含码值，只含注册码 ID。
+func recordOAuthRegistrationCodeCompensation(c *gin.Context, rcID int, reason string) {
+	model.RecordOperationAuditLog(c.GetInt("id"), c.GetInt("role"), auditContentEN("registration_code.consume_failed_after_oauth_create", map[string]any{
+		"registration_code_id": rcID,
+		"reason":               reason,
+		"success":              false,
+	}), c.ClientIP(), "registration_code.consume_failed_after_oauth_create", map[string]any{
+		"registration_code_id": rcID,
+		"reason":               reason,
+	}, nil, &model.AuditRequestInfo{
+		Method: c.Request.Method, Route: c.FullPath(), Path: c.FullPath(), Status: c.Writer.Status(), Success: false,
+	}, c)
+}
+
 type OAuthEmailAlreadyTakenError struct{}
 
 func (e *OAuthEmailAlreadyTakenError) Error() string {
@@ -638,6 +712,10 @@ func handleOAuthError(c *gin.Context, err error) {
 		common.ApiErrorMsg(c, e.Message)
 	case *oauth.TrustLevelError:
 		common.ApiErrorI18n(c, i18n.MsgOAuthTrustLevelLow)
+	case *OAuthRegistrationCodeRequiredError:
+		common.ApiErrorI18n(c, i18n.MsgRegistrationCodeRequired)
+	case *OAuthRegistrationCodeInvalidError:
+		common.ApiErrorI18n(c, i18n.MsgRegistrationCodeInvalid)
 	default:
 		writeSecurityOperationError(c, err)
 	}
