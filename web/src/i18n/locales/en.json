@@ -6826,6 +6826,15 @@
     "Filter by name or code...": "Filter by name or code...",
     "{{used}} / {{max}} uses": "{{used}} / {{max}} uses",
     "Registration codes created": "Registration codes created",
-    "Save registration codes": "Save registration codes"
+    "Save registration codes": "Save registration codes",
+    ",": ",",
+    "registration codes.": "registration codes.",
+    "Add new registration code(s) by providing necessary info.": "Add new registration code(s) by providing necessary info.",
+    "No registration codes available. Create your first registration code to get started.": "No registration codes available. Create your first registration code to get started.",
+    "Registration Code Required": "Registration Code Required",
+    "Require a registration code for new accounts": "Require a registration code for new accounts",
+    "Select charset": "Select charset",
+    "This will permanently delete registration code": "This will permanently delete registration code",
+    "Update the registration code by providing necessary info.": "Update the registration code by providing necessary info."
   }
 }
