@@ -56,6 +56,22 @@ func registrationCodeKeyColName() string {
 	return registrationCodeKeyCol
 }
 
+// registrationCodeFullValueMatch 在查询上追加“完整值（前缀+码+后缀）等于 normalized”的条件。
+//
+// 注册码分发给用户时展示、复制的是完整值 prefix+code+suffix（见前端
+// formatRegistrationCodeValue / 导出对话框），因此注册校验必须针对完整值匹配，
+// 而不能只比较基码列——否则任何带前缀/后缀的注册码都会被判为无效。
+// 存储时 prefix/suffix/code 均已规范化（去空白、大写），传入的 normalized 亦然，
+// 故三者直接拼接后按等值比较即可；前缀/后缀为空时完整值退化为基码，同样匹配。
+// 拼接语法按方言区分：MySQL 用 CONCAT，SQLite 与 PostgreSQL 用 ||。
+func registrationCodeFullValueMatch(query *gorm.DB, normalized string) *gorm.DB {
+	codeCol := registrationCodeKeyColName()
+	if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
+		return query.Where("CONCAT(prefix, "+codeCol+", suffix) = ?", normalized)
+	}
+	return query.Where("prefix || "+codeCol+" || suffix = ?", normalized)
+}
+
 // NormalizeRegistrationCodeValue 对用户输入的注册码做规范化：去首尾空白并统一大写。
 // 生成与匹配都使用规范化后的值。
 func NormalizeRegistrationCodeValue(raw string) string {
@@ -152,7 +168,7 @@ func GetRegistrationCodeByCode(code string) (*RegistrationCode, error) {
 		return nil, errors.New("registration code not provided")
 	}
 	rc := RegistrationCode{}
-	err := DB.Where(registrationCodeKeyColName()+" = ?", normalized).First(&rc).Error
+	err := registrationCodeFullValueMatch(DB, normalized).First(&rc).Error
 	return &rc, err
 }
 
@@ -446,7 +462,7 @@ func CheckRegistrationCodeUsable(code string) error {
 		return ErrRegistrationCodeNotProvided
 	}
 	rc := &RegistrationCode{}
-	err := DB.Where(registrationCodeKeyColName()+" = ?", normalized).First(rc).Error
+	err := registrationCodeFullValueMatch(DB, normalized).First(rc).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrRegistrationCodeInvalid
@@ -475,7 +491,7 @@ func ConsumeRegistrationCode(code string) (rcID int, rcName string, err error) {
 	}
 	rc := &RegistrationCode{}
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		err := lockForUpdate(tx).Where(registrationCodeKeyColName()+" = ?", normalized).First(rc).Error
+		err := registrationCodeFullValueMatch(lockForUpdate(tx), normalized).First(rc).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrRegistrationCodeInvalid

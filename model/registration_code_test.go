@@ -99,6 +99,45 @@ func TestConsumeRejectsEmptyCode(t *testing.T) {
 	require.ErrorIs(t, err, ErrRegistrationCodeNotProvided)
 }
 
+// 带前缀/后缀的注册码分发给用户的是完整值（prefix+code+suffix），校验/消费必须
+// 按完整值匹配；仅输入基码应当失败。回归 “后台生成后前台注册显示无效注册码” 的缺陷。
+func TestConsumeRegistrationCodeMatchesFullValueWithAffixes(t *testing.T) {
+	setupRegistrationCodeFixture(t)
+	now := common.GetTimestamp()
+	affixed := &RegistrationCode{
+		Code:        "AB12CD34EF",
+		Prefix:      "ENT",
+		Suffix:      "X",
+		Name:        "affixed",
+		Status:      common.RegistrationCodeStatusEnabled,
+		MaxUses:     1,
+		CreatedTime: now,
+		UpdatedTime: now,
+	}
+	require.NoError(t, DB.Create(affixed).Error)
+
+	full := affixed.FullValue()
+	require.Equal(t, "ENTAB12CD34EFX", full)
+
+	// 只读校验：完整值可用、基码不可用。
+	require.NoError(t, CheckRegistrationCodeUsable(full))
+	require.NoError(t, CheckRegistrationCodeUsable("  entab12cd34efx "))
+	require.ErrorIs(t, CheckRegistrationCodeUsable(affixed.Code), ErrRegistrationCodeInvalid)
+
+	// 消费：仅输入基码应失败，不得扣减。
+	_, _, err := ConsumeRegistrationCode(affixed.Code)
+	require.ErrorIs(t, err, ErrRegistrationCodeInvalid)
+
+	// 消费完整值成功，used_count 递增。
+	rcID, name, err := ConsumeRegistrationCode(full)
+	require.NoError(t, err)
+	assert.Equal(t, affixed.Id, rcID)
+	assert.Equal(t, "affixed", name)
+	var reloaded RegistrationCode
+	require.NoError(t, DB.First(&reloaded, "id = ?", affixed.Id).Error)
+	assert.Equal(t, 1, reloaded.UsedCount)
+}
+
 // 并发消费同一有限次数码：恰好只有 max_uses 个成功，其余失败，且 used_count 精确。
 func TestConcurrentConsumeBoundedCodeExactCount(t *testing.T) {
 	code, _ := setupRegistrationCodeFixture(t)
