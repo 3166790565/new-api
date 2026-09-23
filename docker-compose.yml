@@ -16,7 +16,14 @@ version: '3.4' # For compatibility with older Docker versions
 
 services:
   new-api:
-    image: calciumion/new-api:latest
+    # 从本仓库源码构建，而不是拉取官方远程镜像。
+    # Build from this repository's source instead of pulling the official remote image.
+    # 首次 `docker compose up -d` 会自动构建；改动源码后需用 `docker compose up -d --build` 重新构建。
+    # The first `docker compose up -d` builds automatically; after changing source you must
+    # rebuild with `docker compose up -d --build` (or `docker compose build`).
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: new-api
     restart: always
     command: --log-dir /app/logs
