@@ -4663,6 +4663,8 @@
     "Recommended to keep this high to avoid upstream throttling.": "Рекомендуется поддерживать это значение высоким, чтобы избежать регулирования со стороны вышестоящего поставщика.",
     "Record IP Address": "Записывать IP-адрес",
     "Record quota usage": "Записывать использование квоты",
+    "Show real model to users in logs": "Show real model to users in logs",
+    "Allow regular users to see the real routing model and the upstream returned model in their usage logs. Admins always see them.": "Allow regular users to see the real routing model and the upstream returned model in their usage logs. Admins always see them.",
     "Recover auto-disabled channels only": "Только восстанавливать автоотключённые каналы",
     "Recursion Strategy": "Стратегия рекурсии",
     "Recursive": "Рекурсивно",

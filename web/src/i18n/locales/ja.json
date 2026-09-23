@@ -4663,6 +4663,8 @@
     "Recommended to keep this high to avoid upstream throttling.": "アップストリームのスロットリングを避けるため、これを高く保つことを推奨します。",
     "Record IP Address": "IPアドレスを記録",
     "Record quota usage": "クォータ使用量を記録",
+    "Show real model to users in logs": "Show real model to users in logs",
+    "Allow regular users to see the real routing model and the upstream returned model in their usage logs. Admins always see them.": "Allow regular users to see the real routing model and the upstream returned model in their usage logs. Admins always see them.",
     "Recover auto-disabled channels only": "自動無効化されたチャネルの復旧のみ",
     "Recursion Strategy": "再帰戦略",
     "Recursive": "再帰",

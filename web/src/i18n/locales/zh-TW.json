@@ -4663,6 +4663,8 @@
     "Recommended to keep this high to avoid upstream throttling.": "建議保持此值較高，以避免上游限流。",
     "Record IP Address": "記錄 IP 地址",
     "Record quota usage": "記錄配額使用量",
+    "Show real model to users in logs": "Show real model to users in logs",
+    "Allow regular users to see the real routing model and the upstream returned model in their usage logs. Admins always see them.": "Allow regular users to see the real routing model and the upstream returned model in their usage logs. Admins always see them.",
     "Recover auto-disabled channels only": "僅恢復自動停用的渠道",
     "Recursion Strategy": "遞迴策略",
     "Recursive": "遞迴",

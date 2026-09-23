@@ -85,6 +85,67 @@ func TestTaskPluginLogVisibilityIsRoleSeparated(t *testing.T) {
 	})
 }
 
+func TestLogUserRealModelVisibilityRespectsSwitch(t *testing.T) {
+	other := common.MapToJsonStr(map[string]any{
+		"model_price":         0.004,
+		"is_model_mapped":     true,
+		"upstream_model_name": "gpt-5-upstream",
+		"response_model": map[string]any{
+			"requested_model": "gpt-5",
+			"upstream_model":  "gpt-5-upstream",
+			"returned_model":  "gpt-5-returned",
+		},
+	})
+	realModelKeys := []string{"is_model_mapped", "upstream_model_name", "response_model"}
+
+	t.Run("user sees real model when enabled", func(t *testing.T) {
+		prev := common.LogUserRealModelEnabled
+		common.LogUserRealModelEnabled = true
+		t.Cleanup(func() { common.LogUserRealModelEnabled = prev })
+
+		logs := []*Log{{Other: other}}
+		formatUserLogs(logs, 0)
+
+		parsed, err := common.StrToMap(logs[0].Other)
+		require.NoError(t, err)
+		for _, key := range realModelKeys {
+			assert.Contains(t, parsed, key)
+		}
+	})
+
+	t.Run("user cannot see real model when disabled", func(t *testing.T) {
+		prev := common.LogUserRealModelEnabled
+		common.LogUserRealModelEnabled = false
+		t.Cleanup(func() { common.LogUserRealModelEnabled = prev })
+
+		logs := []*Log{{Other: other}}
+		formatUserLogs(logs, 0)
+
+		parsed, err := common.StrToMap(logs[0].Other)
+		require.NoError(t, err)
+		for _, key := range realModelKeys {
+			assert.NotContains(t, parsed, key)
+		}
+		// Unrelated public fields stay visible.
+		assert.Contains(t, parsed, "model_price")
+	})
+
+	t.Run("admin always sees real model when disabled", func(t *testing.T) {
+		prev := common.LogUserRealModelEnabled
+		common.LogUserRealModelEnabled = false
+		t.Cleanup(func() { common.LogUserRealModelEnabled = prev })
+
+		logs := []*Log{{Other: other}}
+		FormatAdminLogs(logs)
+
+		parsed, err := common.StrToMap(logs[0].Other)
+		require.NoError(t, err)
+		for _, key := range realModelKeys {
+			assert.Contains(t, parsed, key)
+		}
+	})
+}
+
 func TestLegacyLogOtherVisibilityIsRoleSeparated(t *testing.T) {
 	other := common.MapToJsonStr(map[string]any{
 		"request_path":  "/v1/chat/completions",

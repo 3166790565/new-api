@@ -23,6 +23,17 @@ var legacySensitiveLogOtherKeys = []string{
 	"reject_reason",
 }
 
+// userHiddenRealModelLogOtherKeys are public metadata keys that reveal the real
+// routing model and the upstream returned model. They are stripped from
+// user-visible projections when common.LogUserRealModelEnabled is off, so an
+// admin can decide whether regular users may see them. Admin/root projections
+// keep them regardless.
+var userHiddenRealModelLogOtherKeys = []string{
+	"is_model_mapped",
+	"upstream_model_name",
+	"response_model",
+}
+
 type logOtherVisibility int
 
 const (
@@ -237,6 +248,14 @@ func formatLogOtherJSON(value string, visibility logOtherVisibility) string {
 			if _, exists := values[key]; exists {
 				delete(values, key)
 				changed = true
+			}
+		}
+		if !common.LogUserRealModelEnabled {
+			for _, key := range userHiddenRealModelLogOtherKeys {
+				if _, exists := values[key]; exists {
+					delete(values, key)
+					changed = true
+				}
 			}
 		}
 	} else {

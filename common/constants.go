@@ -94,6 +94,13 @@ var MemoryCacheEnabled bool
 
 var LogConsumeEnabled = true
 
+// LogUserRealModelEnabled controls whether non-admin users may see the real
+// routing model (other.upstream_model_name / is_model_mapped) and the upstream
+// returned model (other.response_model) in their own usage logs. Admins and
+// root always see them regardless of this switch. Defaults to true to preserve
+// the historical behavior where these fields were user-visible.
+var LogUserRealModelEnabled = true
+
 var TLSInsecureSkipVerify bool
 var InsecureTLSConfig = &tls.Config{InsecureSkipVerify: true}
 

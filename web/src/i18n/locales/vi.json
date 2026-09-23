@@ -4663,6 +4663,8 @@
     "Recommended to keep this high to avoid upstream throttling.": "Khuyến nghị giữ mức này cao để tránh điều tiết từ phía thượng nguồn.",
     "Record IP Address": "Ghi lại địa chỉ IP",
     "Record quota usage": "Ghi lại mức sử dụng hạn mức",
+    "Show real model to users in logs": "Show real model to users in logs",
+    "Allow regular users to see the real routing model and the upstream returned model in their usage logs. Admins always see them.": "Allow regular users to see the real routing model and the upstream returned model in their usage logs. Admins always see them.",
     "Recover auto-disabled channels only": "Chỉ khôi phục kênh bị tự động vô hiệu hóa",
     "Recursion Strategy": "Chiến lược đệ quy",
     "Recursive": "Đệ quy",
