@@ -615,6 +615,9 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	common.SetContextKey(c, constant.ContextKeyChannelAutoBan, channel.GetAutoBan())
 	common.SetContextKey(c, constant.ContextKeyChannelModelMapping, channel.GetModelMapping())
 	common.SetContextKey(c, constant.ContextKeyChannelStatusCodeMapping, channel.GetStatusCodeMapping())
+	// Snapshot the contribution link so the settlement-time share payout can
+	// identify the contributor without a database lookup on the hot path.
+	common.SetContextKey(c, constant.ContextKeyChannelContributionId, channel.ContributionId)
 
 	key, index, newAPIError := channel.GetNextEnabledKey()
 	if newAPIError != nil {

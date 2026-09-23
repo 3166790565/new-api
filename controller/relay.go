@@ -696,6 +696,8 @@ func executeTaskSubmissionWith(
 		diagnostics.failed("settle", "billing_error", taskErr, true)
 		return nil, taskErr
 	}
+	// Task settlement runs through SettleBilling, which awards the contribution
+	// share on success; failed tasks refund on a separate path and never pay.
 	if task.Status != model.TaskStatusFailure {
 		service.MarkRequestPolicySuccess(c, nil)
 	} else {

@@ -79,6 +79,9 @@ func (s *BillingSession) Settle(actualQuota int) error {
 		s.relayInfo.SubscriptionPostDelta += int64(delta)
 	}
 	s.settled = true
+	// 贡献分成不在此入账：它由持有真实 gin.Context 的 SettleBilling 在结算成功后统一
+	// 结算（见 service/billing.go）。放在这里会用 nil ctx 记录分成日志、丢失 request_id，
+	// 且此前的改动在覆盖本段时误删了上面的 settled/PostDelta 逻辑，破坏了结算幂等与订阅日志。
 	return tokenErr
 }
 

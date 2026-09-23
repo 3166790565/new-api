@@ -371,6 +371,9 @@ func migrateDB() error {
 		&SystemTaskLock{},
 		&CasbinRule{},
 		&AuthzRole{},
+		&ChannelContribution{},
+		&ChannelContributionModel{},
+		&ContributionEarning{},
 	)
 	if err != nil {
 		return err

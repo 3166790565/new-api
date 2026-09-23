@@ -229,6 +229,8 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 	if err := SettleBilling(ctx, relayInfo, quota); err != nil {
 		logger.LogError(ctx, "error settling billing: "+err.Error())
 	}
+	// 贡献分成由 SettleBilling 在结算成功后内部结算（真实 ctx）。此处不再重复调用：
+	// 成功路径下它已入账（会被幂等闸挡掉），而结算失败时更不能再单独入账。
 
 	logModel := modelName
 	if extraContent != "" {

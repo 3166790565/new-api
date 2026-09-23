@@ -39,6 +39,15 @@ end
 redis.call('HINCRBY', KEYS[1], 'Quota', ARGV[1])
 return 1`
 
+const userContributionQuotaDeltaScript = `
+if tonumber(redis.call('HGET', KEYS[1], 'Id') or '0') ~= tonumber(ARGV[2])
+  or tonumber(redis.call('HGET', KEYS[1], 'CacheSchema') or '0') ~= tonumber(ARGV[3])
+  or redis.call('HEXISTS', KEYS[1], 'ContributionQuota') == 0 then
+  return -1
+end
+redis.call('HINCRBY', KEYS[1], 'ContributionQuota', ARGV[1])
+return 1`
+
 const tokenQuotaReserveScript = `
 if tonumber(redis.call('HGET', KEYS[1], 'Id') or '0') ~= tonumber(ARGV[2])
   or redis.call('HEXISTS', KEYS[1], 'RemainQuota') == 0
@@ -89,6 +98,30 @@ func cacheApplyUserQuotaDelta(userID int, delta int64) (cacheQuotaResult, error)
 	result, err := common.RDB.Eval(context.Background(), userQuotaDeltaScript,
 		[]string{getUserCacheKey(userID)}, delta, userID, userCacheSchemaVersion).Int()
 	return quotaResultFromLua(result, err)
+}
+
+// cacheIncrUserContributionQuota keeps the contribution balance in sync inside
+// the same user hash. Like the wallet helpers it skips a missing hash (the next
+// read hydrates it from the committed database value) and refuses to create a
+// partial hash, so a later full read cannot mistake it for a fresh cache entry.
+func cacheIncrUserContributionQuota(userID int, delta int64) error {
+	if !common.RedisEnabled {
+		return nil
+	}
+	_, err := common.RDB.Eval(context.Background(), userContributionQuotaDeltaScript,
+		[]string{getUserCacheKey(userID)}, delta, userID, userCacheSchemaVersion).Int()
+	return err
+}
+
+// syncContributionQuotaCache mirrors a committed contribution-balance change
+// into the live cache so a subsequent transfer sees it before the hash expires.
+func syncContributionQuotaCache(userId int, delta int) {
+	if delta == 0 {
+		return
+	}
+	if err := cacheIncrUserContributionQuota(userId, int64(delta)); err != nil {
+		common.SysLog("failed to sync contribution quota to user cache: " + err.Error())
+	}
 }
 
 func cacheTryReserveTokenQuota(id int, key string, amount int64) (cacheQuotaResult, error) {

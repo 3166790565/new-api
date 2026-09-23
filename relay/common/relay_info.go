@@ -74,6 +74,10 @@ type ChannelMeta struct {
 	UpstreamModelName    string
 	IsModelMapped        bool
 	SupportStreamOptions bool // 是否支持流式选项
+	// ContributionId is the user contribution this channel was materialized
+	// from (0 for regular admin channels). The share payout reads it from the
+	// relay info snapshot, never from a database lookup.
+	ContributionId int
 }
 
 type TokenCountMeta struct {
@@ -171,6 +175,11 @@ type RelayInfo struct {
 	// supported single-request bound (or NaN fallback) while computing this request's charge.
 	// It is surfaced onto the consume/task log's admin_info for auditing.
 	QuotaClamp *common.QuotaClamp
+
+	// ContributionShareAwarded guards the once-per-request contribution payout.
+	// Settlement can be reached more than once (retries, explicit settle paths);
+	// the flag keeps the credit from being applied twice.
+	ContributionShareAwarded bool
 
 	// TieredBillingSnapshot captures tiered billing rules at pre-consume time.
 	// Auto-group retries refresh its group-dependent fields before each attempt
@@ -272,6 +281,7 @@ func (info *RelayInfo) InitChannelMeta(c *gin.Context) {
 		UpstreamModelName:    common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
 		IsModelMapped:        false,
 		SupportStreamOptions: false,
+		ContributionId:       common.GetContextKeyInt(c, constant.ContextKeyChannelContributionId),
 	}
 
 	if channelType == constant.ChannelTypeAzure {
@@ -855,6 +865,18 @@ func (info *RelayInfo) GetChannelID() int {
 		return 0
 	}
 	return info.ChannelId
+}
+
+// ContributionId returns the id of the user contribution this channel was
+// materialized from, or 0 for regular admin channels. The link is snapshotted
+// onto ChannelMeta at channel-selection time, so this is a pure in-memory read.
+// The contributor's user id is not carried here; the payout path resolves it
+// from the contribution record (see service.AwardContributionShare).
+func (info *RelayInfo) ContributionId() int {
+	if info == nil || info.ChannelMeta == nil {
+		return 0
+	}
+	return info.ChannelMeta.ContributionId
 }
 
 func (info *RelayInfo) GetChannelType() int {
