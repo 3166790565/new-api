@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 
@@ -51,6 +52,7 @@ type ChannelContributionModel struct {
 	ContributionId int    `json:"contribution_id" gorm:"index;not null"`
 	UpstreamModel  string `json:"upstream_model" gorm:"type:varchar(255);not null"`
 	PublicModel    string `json:"public_model" gorm:"type:varchar(255);not null"`
+	Status         int    `json:"status" gorm:"index;default:0"`
 	RejectReason   string `json:"reject_reason" gorm:"type:varchar(255)"`
 	ChannelId      int    `json:"channel_id" gorm:"index;default:0"`
 	CreatedTime    int64  `json:"created_time" gorm:"bigint"`
@@ -155,6 +157,15 @@ func GetContributionModels(contributionId int) ([]ChannelContributionModel, erro
 	return models, err
 }
 
+// CountPendingContributionsByUser powers the MaxPendingPerUser submission cap.
+func CountPendingContributionsByUser(userId int) (int64, error) {
+	var total int64
+	err := DB.Model(&ChannelContribution{}).
+		Where("user_id = ? AND status = ?", userId, ContributionStatusPending).
+		Count(&total).Error
+	return total, err
+}
+
 // ReplaceContributionModels rewrites the contributed model list of a pending
 // contribution. Only pending submissions may be edited.
 func ReplaceContributionModels(contributionId int, models []ChannelContributionModel) error {
@@ -245,15 +256,15 @@ func UpdatePendingContributionDetails(contributionId, userId int, update Channel
 	result := DB.Model(&ChannelContribution{}).
 		Where("id = ? AND user_id = ? AND status = ?", contributionId, userId, ContributionStatusPending).
 		Updates(map[string]any{
-			"type":         update.Type,
-			"name":         update.Name,
-			"base_url":     update.BaseURL,
-			"key":          update.Key,
-			"group":        update.Group,
-			"priority":     update.Priority,
-			"weight":       update.Weight,
-			"test_model":   update.TestModel,
-			"test_time":    update.TestTime,
+			"type":          update.Type,
+			"name":          update.Name,
+			"base_url":      update.BaseURL,
+			"key":           update.Key,
+			"group":         update.Group,
+			"priority":      update.Priority,
+			"weight":        update.Weight,
+			"test_model":    update.TestModel,
+			"test_time":     update.TestTime,
 			"reject_reason": "",
 		})
 	if result.Error != nil {
@@ -265,17 +276,229 @@ func UpdatePendingContributionDetails(contributionId, userId int, update Channel
 	return nil
 }
 
+// ContributionReviewDecision is one administrator per-model verdict during
+// review. It is keyed by ChannelContributionModel.Id; a model absent from the
+// decision list defaults to approved so the common "approve everything" case
+// needs no per-model payload.
+type ContributionReviewDecision struct {
+	ModelId      int    `json:"model_id"`
+	Approve      bool   `json:"approve"`
+	PublicModel  string `json:"public_model"`
+	RejectReason string `json:"reject_reason"`
+}
+
+// ApproveContribution materializes an approved contribution into a live routable
+// Channel and links every approved model to it, all within one transaction so a
+// partial failure cannot leave a channel without its model links (or vice
+// versa). sharePercent, when non-nil, overrides the contribution's share
+// percent. The channel cache is rebuilt after commit so the new channel becomes
+// selectable immediately. It returns the updated contribution and the id of the
+// channel created.
+func ApproveContribution(contributionId, reviewerId int, sharePercent *int, decisions []ContributionReviewDecision) (*ChannelContribution, int, error) {
+	decisionByModel := make(map[int]ContributionReviewDecision, len(decisions))
+	for _, d := range decisions {
+		decisionByModel[d.ModelId] = d
+	}
+	var (
+		updated   ChannelContribution
+		channelId int
+	)
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var contribution ChannelContribution
+		if err := lockForUpdate(tx).First(&contribution, contributionId).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrContributionNotFound
+			}
+			return err
+		}
+		if contribution.Status != ContributionStatusPending {
+			return ErrContributionState
+		}
+		var models []ChannelContributionModel
+		if err := tx.Where("contribution_id = ?", contributionId).Order("id asc").Find(&models).Error; err != nil {
+			return err
+		}
+		if len(models) == 0 {
+			return errors.New("contribution has no models to review")
+		}
+
+		// Partition the models per decision. Approved rows keep (or override) a
+		// public model name; rejected rows carry the reviewer's reason.
+		approved := make([]ChannelContributionModel, 0, len(models))
+		for i := range models {
+			decision, provided := decisionByModel[models[i].Id]
+			approve := !provided || decision.Approve
+			if approve {
+				if provided && decision.PublicModel != "" {
+					models[i].PublicModel = decision.PublicModel
+				}
+				models[i].Status = ContributionModelStatusApproved
+				models[i].RejectReason = ""
+				approved = append(approved, models[i])
+			} else {
+				models[i].Status = ContributionModelStatusRejected
+				models[i].RejectReason = decision.RejectReason
+				models[i].ChannelId = 0
+			}
+		}
+		if len(approved) == 0 {
+			return errors.New("approval requires at least one approved model; reject the contribution instead")
+		}
+
+		// Materialize one Channel carrying the approved public models. Upstream
+		// names that differ from the public name become the model mapping so the
+		// relay rewrites the request before it reaches the provider.
+		publicModels := make([]string, 0, len(approved))
+		modelMapping := make(map[string]string, len(approved))
+		for _, m := range approved {
+			publicModels = append(publicModels, m.PublicModel)
+			if m.UpstreamModel != "" && m.UpstreamModel != m.PublicModel {
+				modelMapping[m.PublicModel] = m.UpstreamModel
+			}
+		}
+		group := contribution.Group
+		if group == "" {
+			group = "default"
+		}
+		channel := &Channel{
+			Type:           contribution.Type,
+			Key:            contribution.Key,
+			Status:         common.ChannelStatusEnabled,
+			Name:           contribution.Name,
+			Weight:         contribution.Weight,
+			CreatedTime:    common.GetTimestamp(),
+			BaseURL:        contribution.BaseURL,
+			Models:         strings.Join(publicModels, ","),
+			Group:          group,
+			Priority:       contribution.Priority,
+			ContributionId: contribution.Id,
+		}
+		if len(modelMapping) > 0 {
+			mappingBytes, err := common.Marshal(modelMapping)
+			if err != nil {
+				return err
+			}
+			mapping := string(mappingBytes)
+			channel.ModelMapping = &mapping
+		}
+		// Replicate Channel.Insert() on the transaction so the row and its
+		// abilities commit atomically with the contribution updates.
+		if err := tx.Create(channel).Error; err != nil {
+			return err
+		}
+		if err := channel.AddAbilities(tx); err != nil {
+			return err
+		}
+		channelId = channel.Id
+
+		// Persist each model's verdict, linking approved rows to the new channel.
+		for i := range models {
+			updates := map[string]any{
+				"status":        models[i].Status,
+				"reject_reason": models[i].RejectReason,
+				"public_model":  models[i].PublicModel,
+				"channel_id":    0,
+			}
+			if models[i].Status == ContributionModelStatusApproved {
+				updates["channel_id"] = channel.Id
+			}
+			if err := tx.Model(&ChannelContributionModel{}).Where("id = ?", models[i].Id).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+
+		newStatus := ContributionStatusApproved
+		if len(approved) < len(models) {
+			newStatus = ContributionStatusPartiallyApproved
+		}
+		contribUpdates := map[string]any{
+			"status":            newStatus,
+			"reviewer_id":       reviewerId,
+			"reviewed_time":     common.GetTimestamp(),
+			"source_channel_id": channel.Id,
+			"reject_reason":     "",
+		}
+		if sharePercent != nil {
+			contribUpdates["share_percent"] = *sharePercent
+		}
+		if err := tx.Model(&ChannelContribution{}).Where("id = ?", contributionId).Updates(contribUpdates).Error; err != nil {
+			return err
+		}
+		contribution.Status = newStatus
+		contribution.ReviewerId = reviewerId
+		contribution.SourceChannelId = channel.Id
+		if sharePercent != nil {
+			contribution.SharePercent = sharePercent
+		}
+		updated = contribution
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	// Rebuild routing so the freshly materialized channel is live for callers.
+	InitChannelCache()
+	return &updated, channelId, nil
+}
+
+// RejectContribution declines a pending submission without creating a channel.
+// Every contributed model is marked rejected so the record reflects a single,
+// consistent verdict.
+func RejectContribution(contributionId, reviewerId int, reason string) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&ChannelContribution{}).
+			Where("id = ? AND status = ?", contributionId, ContributionStatusPending).
+			Updates(map[string]any{
+				"status":        ContributionStatusRejected,
+				"reviewer_id":   reviewerId,
+				"reviewed_time": common.GetTimestamp(),
+				"reject_reason": reason,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrContributionState
+		}
+		return tx.Model(&ChannelContributionModel{}).
+			Where("contribution_id = ?", contributionId).
+			Updates(map[string]any{
+				"status":        ContributionModelStatusRejected,
+				"reject_reason": reason,
+			}).Error
+	})
+}
+
+// UpdateUserContributionSharePercent sets (or clears, when percent is nil) a
+// contributor's per-user share override. A nil override makes the user inherit
+// the global default share percent. Setting the same value again is a success
+// (MySQL reports zero changed rows for an unchanged update), so only a missing
+// user is treated as an error.
+func UpdateUserContributionSharePercent(userId int, percent *int) error {
+	if userId <= 0 {
+		return errors.New("invalid user id")
+	}
+	var count int64
+	if err := DB.Model(&User{}).Where("id = ?", userId).Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return errors.New("user not found")
+	}
+	return DB.Model(&User{}).Where("id = ?", userId).Update("contribution_share_percent", percent).Error
+}
+
 // ListContributors returns the users who own at least one approved
 // contribution, together with their aggregate contribution counts.
 type ContributionContributor struct {
-	UserId          int    `json:"user_id"`
-	Username        string `json:"username"`
-	DisplayName     string `json:"display_name"`
-	TotalCount      int64  `json:"total_count"`
-	ApprovedCount   int64  `json:"approved_count"`
-	PendingCount    int64  `json:"pending_count"`
-	ContributionQuota int  `json:"contribution_quota"`
-	SharePercent    *int   `json:"share_percent"`
+	UserId            int    `json:"user_id"`
+	Username          string `json:"username"`
+	DisplayName       string `json:"display_name"`
+	TotalCount        int64  `json:"total_count"`
+	ApprovedCount     int64  `json:"approved_count"`
+	PendingCount      int64  `json:"pending_count"`
+	ContributionQuota int    `json:"contribution_quota"`
+	SharePercent      *int   `json:"share_percent"`
 }
 
 // ListContributors joins contributions with users so the admin overview can

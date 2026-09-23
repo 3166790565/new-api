@@ -867,10 +867,12 @@ func (info *RelayInfo) GetChannelID() int {
 	return info.ChannelId
 }
 
-// ContributorUserId returns the user who contributed the channel serving this
-// request, or 0 for regular admin channels. The contribution link is snapshotted
+// ContributionId returns the id of the user contribution this channel was
+// materialized from, or 0 for regular admin channels. The link is snapshotted
 // onto ChannelMeta at channel-selection time, so this is a pure in-memory read.
-func (info *RelayInfo) ContributorUserId() int {
+// The contributor's user id is not carried here; the payout path resolves it
+// from the contribution record (see service.AwardContributionShare).
+func (info *RelayInfo) ContributionId() int {
 	if info == nil || info.ChannelMeta == nil {
 		return 0
 	}

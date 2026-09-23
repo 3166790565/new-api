@@ -74,13 +74,14 @@ func (s *BillingSession) Settle(actualQuota int) error {
 				s.relayInfo.UserId, s.relayInfo.TokenId, delta, tokenErr.Error()))
 		}
 	}
-	// 4) 资金来源已提交，本次请求对调用方的扣费已经定案：现在结算贡献分成。
-	// BillingSession.Settle 可被调用超过一次（显式补差、重试），AwardContributionShare
-	// 内部以 relayInfo.ContributionShareAwarded 为幂等闸，绝不会重复入账。
-	if s.relayInfo.FinalPreConsumedQuota >= 0 {
-		AwardContributionShare(nil, s.relayInfo, actualQuota)
+	// 3) 更新 relayInfo 上的订阅 PostDelta（用于日志）
+	if s.funding.Source() == BillingSourceSubscription {
+		s.relayInfo.SubscriptionPostDelta += int64(delta)
 	}
-
+	s.settled = true
+	// 贡献分成不在此入账：它由持有真实 gin.Context 的 SettleBilling 在结算成功后统一
+	// 结算（见 service/billing.go）。放在这里会用 nil ctx 记录分成日志、丢失 request_id，
+	// 且此前的改动在覆盖本段时误删了上面的 settled/PostDelta 逻辑，破坏了结算幂等与订阅日志。
 	return tokenErr
 }
 

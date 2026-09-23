@@ -56,6 +56,9 @@ const defaultOperationsSettings: OperationsSettings = {
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',
   'perf_metrics_setting.retention_days': 0,
+  'contribution_setting.enabled': false,
+  'contribution_setting.default_share_percent': 10,
+  'contribution_setting.max_pending_per_user': 5,
 }
 
 export function OperationsSettings() {

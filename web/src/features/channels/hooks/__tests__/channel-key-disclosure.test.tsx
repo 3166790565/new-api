@@ -20,7 +20,6 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { SecureVerificationDialog } from '@/features/auth/secure-verification'
 import { api } from '@/lib/api'
 
 import { useChannelKeyDisclosure } from '../use-channel-key-disclosure'
@@ -35,7 +34,6 @@ function Harness(props: { open: boolean; channelId: number }) {
       <output aria-label='Channel key'>
         {disclosure.channelKey ?? 'Hidden'}
       </output>
-      <SecureVerificationDialog {...disclosure.verification.dialogProps} />
     </>
   )
 }
@@ -48,60 +46,44 @@ function deferredResponse<T>() {
   return { promise, resolve }
 }
 
-function channelVerification() {
-  vi.spyOn(api, 'get').mockResolvedValue({
-    data: {
-      success: true,
-      data: {
-        scope: 'channel.key.read',
-        methods: [{ method: '2fa', available: true }],
-        oauth_providers: [],
-        password_encryption_enabled: false,
-      },
-    },
-  })
-  return {
-    data: {
-      success: true,
-      data: {
-        proof_token: 'channel-proof',
-        method: '2fa',
-        scope: 'channel.key.read',
-        expires_at: Math.floor(Date.now() / 1000) + 60,
-      },
-    },
-  }
-}
-
 afterEach(() => vi.restoreAllMocks())
+
+it('reveals the channel key without a verification step', async () => {
+  const post = vi.spyOn(api, 'post').mockResolvedValue({
+    data: { success: true, data: { key: 'CHANNEL_A_SECRET' } },
+  })
+  const user = userEvent.setup()
+  render(<Harness open channelId={123} />)
+  await user.click(screen.getByRole('button', { name: 'Reveal' }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/channel/123/key',
+      undefined,
+      expect.anything()
+    )
+  )
+  await waitFor(() =>
+    expect(screen.getByLabelText('Channel key')).toHaveTextContent(
+      'CHANNEL_A_SECRET'
+    )
+  )
+  // The reveal must never touch the secure-verification endpoint.
+  expect(post.mock.calls.map(([url]) => url)).toEqual(['/api/channel/123/key'])
+})
 
 it.each(['switch', 'close'] as const)(
   'discards a pending channel key response after %s',
   async (change) => {
-    const proof = channelVerification()
     const keyReply = deferredResponse<{
       data: { success: boolean; data: { key: string } }
     }>()
-    const post = vi.spyOn(api, 'post').mockImplementation((url) => {
-      if (url === '/api/verify') return Promise.resolve(proof)
+    vi.spyOn(api, 'post').mockImplementation((url) => {
       if (url === '/api/channel/123/key') return keyReply.promise
       throw new Error(`Unexpected POST ${url}`)
     })
     const user = userEvent.setup()
     const view = render(<Harness open channelId={123} />)
     await user.click(screen.getByRole('button', { name: 'Reveal' }))
-    await user.type(
-      await screen.findByLabelText('Authenticator code or backup code'),
-      '123456'
-    )
-    await user.click(screen.getByRole('button', { name: 'Verify' }))
-    await waitFor(() =>
-      expect(post).toHaveBeenCalledWith(
-        '/api/channel/123/key',
-        undefined,
-        expect.anything()
-      )
-    )
     view.rerender(
       <Harness
         open={change !== 'close'}
@@ -118,36 +100,3 @@ it.each(['switch', 'close'] as const)(
     expect(screen.queryByText('CHANNEL_A_SECRET')).not.toBeInTheDocument()
   }
 )
-
-it('cancels a pending verification when the selected channel changes', async () => {
-  channelVerification()
-  const reply = deferredResponse<{
-    data: { success: boolean; data: Record<string, unknown> }
-  }>()
-  const post = vi.spyOn(api, 'post').mockReturnValue(reply.promise)
-  const user = userEvent.setup()
-  const view = render(<Harness open channelId={123} />)
-  await user.click(screen.getByRole('button', { name: 'Reveal' }))
-  await user.type(
-    await screen.findByLabelText('Authenticator code or backup code'),
-    '123456'
-  )
-  await user.click(screen.getByRole('button', { name: 'Verify' }))
-  view.rerender(<Harness open channelId={456} />)
-  await act(async () => {
-    reply.resolve({
-      data: {
-        success: true,
-        data: {
-          proof_token: 'late-proof',
-          scope: 'channel.key.read',
-          method: '2fa',
-          expires_at: Math.floor(Date.now() / 1000) + 60,
-        },
-      },
-    })
-    await reply.promise
-  })
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  expect(post.mock.calls.map(([url]) => url)).toEqual(['/api/verify'])
-})

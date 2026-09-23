@@ -25,6 +25,7 @@ import { PerformanceSection } from '../maintenance/performance-section'
 import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { ContributionSettingsSection } from './contribution-section'
 
 const OPERATIONS_SECTIONS = [
   {
@@ -36,6 +37,22 @@ const OPERATIONS_SECTIONS = [
           DefaultCollapseSidebar: settings.DefaultCollapseSidebar,
           DemoSiteEnabled: settings.DemoSiteEnabled,
           SelfUseModeEnabled: settings.SelfUseModeEnabled,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'contribution',
+    titleKey: 'Channel Contribution',
+    build: (settings: OperationsSettings) => (
+      <ContributionSettingsSection
+        defaultValues={{
+          'contribution_setting.enabled':
+            settings['contribution_setting.enabled'] ?? false,
+          'contribution_setting.default_share_percent':
+            settings['contribution_setting.default_share_percent'] ?? 10,
+          'contribution_setting.max_pending_per_user':
+            settings['contribution_setting.max_pending_per_user'] ?? 5,
         }}
       />
     ),

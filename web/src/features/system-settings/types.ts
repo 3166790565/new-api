@@ -387,6 +387,9 @@ export type OperationsSettings = {
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'hour' | 'minute' | '5min'
   'perf_metrics_setting.retention_days': number
+  'contribution_setting.enabled': boolean
+  'contribution_setting.default_share_percent': number
+  'contribution_setting.max_pending_per_user': number
 }
 
 export type SecuritySettings = {

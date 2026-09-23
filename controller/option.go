@@ -218,6 +218,10 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	}
+	if err := operation_setting.ValidateContributionOption(option.Key, option.Value.(string)); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 	switch option.Key {
 	case "GitHubOAuthEnabled":
 		if option.Value == "true" && common.GitHubClientId == "" {

@@ -104,7 +104,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { SecureVerificationDialog } from '@/features/auth/secure-verification'
 import { PluginIcon } from '@/features/task-plugins/components/plugin-icon'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useHiddenClickUnlock } from '@/hooks/use-hidden-click-unlock'
@@ -560,7 +559,7 @@ export function ChannelMutateDrawer({
 
   const { copyToClipboard } = useCopyToClipboard()
 
-  const { channelKey, isChannelKeyLoading, handleRevealKey, verification } =
+  const { channelKey, isChannelKeyLoading, handleRevealKey } =
     useChannelKeyDisclosure(open, channelId)
 
   // Check if this is a multi-key channel
@@ -4367,9 +4366,7 @@ export function ChannelMutateDrawer({
                                 {t('Current key')}
                               </p>
                               <p className='text-muted-foreground text-xs'>
-                                {t(
-                                  'Verification required to reveal the saved key.'
-                                )}
+                                {t('Reveal the saved key for this channel.')}
                               </p>
                             </div>
                             <div className='flex items-center gap-2'>
@@ -4378,12 +4375,9 @@ export function ChannelMutateDrawer({
                                 variant='outline'
                                 size='sm'
                                 onClick={handleRevealKey}
-                                disabled={
-                                  isChannelKeyLoading || verification.isActive
-                                }
+                                disabled={isChannelKeyLoading}
                               >
-                                {isChannelKeyLoading ||
-                                verification.isActive ? (
+                                {isChannelKeyLoading ? (
                                   <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                                 ) : (
                                   <Eye className='mr-2 h-4 w-4' />
@@ -5032,8 +5026,6 @@ export function ChannelMutateDrawer({
           }}
         />
       )}
-
-      <SecureVerificationDialog {...verification.dialogProps} />
 
       {/* Missing Models Confirmation Dialog */}
       <MissingModelsConfirmationDialog

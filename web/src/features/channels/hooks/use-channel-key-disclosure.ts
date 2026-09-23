@@ -20,9 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { useSecureVerification } from '@/features/auth/secure-verification'
 import { handleServerError } from '@/lib/handle-server-error'
-import { AuthOperationError } from '@/lib/secure-verification'
 import { createServerError } from '@/lib/server-error-message'
 
 import { getChannelKey } from '../api'
@@ -32,9 +30,6 @@ export function useChannelKeyDisclosure(
   channelId: number | null
 ) {
   const { t } = useTranslation()
-  const verification = useSecureVerification()
-  const cancelVerification = verification.cancel
-  const requestVerification = verification.requestVerification
   const [disclosedKey, setDisclosedKey] = useState<{
     channelId: number
     key: string
@@ -48,30 +43,16 @@ export function useChannelKeyDisclosure(
     return () => {
       operation.current?.abort()
       operation.current = null
-      cancelVerification()
     }
-  }, [open, channelId, cancelVerification])
+  }, [open, channelId])
 
   const handleRevealKey = useCallback(async () => {
     if (!channelId || !open || operation.current) return
     const current = new AbortController()
     operation.current = current
+    setIsChannelKeyLoading(true)
     try {
-      const proof = await requestVerification({
-        scope: 'channel.key.read',
-        context: { channel_id: channelId },
-        title: t('Verify to view channel key'),
-        description: t(
-          'Use Passkey or 2FA to confirm your identity before revealing this channel key.'
-        ),
-      })
-      if (!proof || operation.current !== current) return
-      setIsChannelKeyLoading(true)
-      const res = await getChannelKey(
-        channelId,
-        proof.proof_token,
-        current.signal
-      )
+      const res = await getChannelKey(channelId, current.signal)
       if (operation.current !== current) return
       if (!res.success) {
         throw createServerError(res, t('Failed to fetch channel key'))
@@ -80,7 +61,7 @@ export function useChannelKeyDisclosure(
       toast.success(t('Channel key unlocked'))
     } catch (error) {
       if (operation.current === current && !current.signal.aborted) {
-        handleServerError(AuthOperationError.from(error))
+        handleServerError(error)
       }
     } finally {
       if (operation.current === current) {
@@ -88,9 +69,9 @@ export function useChannelKeyDisclosure(
         setIsChannelKeyLoading(false)
       }
     }
-  }, [channelId, open, requestVerification, t])
+  }, [channelId, open, t])
 
   const channelKey =
     open && disclosedKey?.channelId === channelId ? disclosedKey.key : null
-  return { channelKey, isChannelKeyLoading, handleRevealKey, verification }
+  return { channelKey, isChannelKeyLoading, handleRevealKey }
 }

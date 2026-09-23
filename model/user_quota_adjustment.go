@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/shopspring/decimal"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -162,7 +163,7 @@ func (user *User) TransferContributionQuotaToQuota(quota int) error {
 	if err := common.ValidateWalletQuota(quota); err != nil {
 		return err
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	if err := DB.Transaction(func(tx *gorm.DB) error {
 		if err := lockForUpdate(tx).First(user, user.Id).Error; err != nil {
 			return err
 		}
@@ -178,5 +179,22 @@ func (user *User) TransferContributionQuotaToQuota(quota int) error {
 			return err
 		}
 		return nil
+	}); err != nil {
+		return err
+	}
+	// Keep the relay-facing caches consistent with the committed balances: the
+	// wallet quota cache is read on the hot path, so a stale value here would let
+	// the transferred amount be spent twice or not at all.
+	gopool.Go(func() {
+		if err := cacheIncrUserQuota(user.Id, int64(quota)); err != nil {
+			common.SysLog("failed to sync wallet quota after contribution transfer: " + err.Error())
+		}
+		if err := cacheIncrUserContributionQuota(user.Id, -int64(quota)); err != nil {
+			common.SysLog("failed to sync contribution quota after contribution transfer: " + err.Error())
+		}
 	})
+	// Record a user-visible log entry so the wallet credit from a contribution
+	// transfer is auditable alongside top-ups and manual adjustments.
+	RecordLog(user.Id, LogTypeManage, fmt.Sprintf("将贡献收益 %s 划转到钱包余额", logger.LogQuota(quota)))
+	return nil
 }

@@ -29,15 +29,19 @@ func AwardContributionShare(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 	if relayInfo.ChannelMeta == nil || relayInfo.ChannelMeta.ContributionId <= 0 {
 		return
 	}
-	// Self-calls by the contributor are excluded: they would otherwise let a
-	// contributor spend (1 - share%) of the model price and re-mint the rest.
-	if relayInfo.UserId <= 0 || relayInfo.UserId == relayInfo.ContributorUserId() {
+	if relayInfo.UserId <= 0 {
 		return
 	}
 
 	contribution, err := model.GetContributionById(relayInfo.ChannelMeta.ContributionId)
 	if err != nil {
 		logger.LogWarn(ctx, fmt.Sprintf("contribution share: contribution %d not found: %v", relayInfo.ChannelMeta.ContributionId, err))
+		return
+	}
+	contributorUserId := contribution.UserId
+	// Self-calls by the contributor are excluded: they would otherwise let a
+	// contributor spend (1 - share%) of the model price and re-mint the rest.
+	if contributorUserId <= 0 || relayInfo.UserId == contributorUserId {
 		return
 	}
 
@@ -66,16 +70,16 @@ func AwardContributionShare(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 	}
 	if clamp != nil {
 		logger.LogWarn(ctx, fmt.Sprintf("contribution share saturated: op=%s kind=%s original=%g clamped=%d contributor=%d model=%s",
-			clamp.Op, clamp.Kind, clamp.Original, clamp.Clamped, relayInfo.ContributorUserId(), relayInfo.OriginModelName))
+			clamp.Op, clamp.Kind, clamp.Original, clamp.Clamped, contributorUserId, relayInfo.OriginModelName))
 	}
 
-	if err := model.IncreaseContributionQuota(relayInfo.ContributorUserId(), shareQuota, false); err != nil {
+	if err := model.IncreaseContributionQuota(contributorUserId, shareQuota, false); err != nil {
 		logger.LogError(ctx, fmt.Sprintf("failed to credit contribution share: user=%d quota=%d err=%v",
-			relayInfo.ContributorUserId(), shareQuota, err))
+			contributorUserId, shareQuota, err))
 		return
 	}
 	if err := model.RecordContributionEarning(&model.ContributionEarning{
-		ContributorUserId: relayInfo.ContributorUserId(),
+		ContributorUserId: contributorUserId,
 		CallerUserId:      relayInfo.UserId,
 		ContributionId:    contribution.Id,
 		ChannelId:         relayInfo.ChannelId,
@@ -90,7 +94,7 @@ func AwardContributionShare(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 		// balance pages would disagree. Log loudly so it can be reconciled
 		// against the consume log via RequestId.
 		logger.LogError(ctx, fmt.Sprintf("contribution share credited but ledger write failed: user=%d share=%d request=%s err=%v",
-			relayInfo.ContributorUserId(), shareQuota, relayInfo.RequestId, err))
+			contributorUserId, shareQuota, relayInfo.RequestId, err))
 	}
 
 	// Idempotency: mark the award before returning so a repeated settle on the
