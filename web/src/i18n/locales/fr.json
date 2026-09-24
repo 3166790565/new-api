@@ -1,5 +1,12 @@
 {
   "translation": {
+    "One more step": "Encore une étape",
+    "Changed your mind?": "Vous avez changé d'avis ?",
+    "Back to sign in": "Retour à la connexion",
+    "Invalid registration code": "Code d'inscription invalide",
+    "Please enter your registration code": "Veuillez saisir votre code d'inscription",
+    "Your sign-up session has expired. Please sign in again.": "Votre session d'inscription a expiré. Veuillez vous reconnecter.",
+    "Creating a new account requires a registration code. Enter it below to finish signing up.": "La création d'un nouveau compte nécessite un code d'inscription. Saisissez-le ci-dessous pour terminer l'inscription.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

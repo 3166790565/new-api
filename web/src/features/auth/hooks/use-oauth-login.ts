@@ -66,7 +66,7 @@ export function useOAuthLogin(
     clearAuthentication()
   }
 
-  const handleGitHubLogin = async (registrationCode?: string) => {
+  const handleGitHubLogin = async () => {
     if (!status?.github_client_id) return
     if (githubButtonDisabled) return
 
@@ -88,7 +88,7 @@ export function useOAuthLogin(
 
     try {
       await resetSession()
-      const state = await createOAuthFlow('github', 'login', registrationCode)
+      const state = await createOAuthFlow('github', 'login')
       rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildGitHubOAuthUrl(status.github_client_id, state)
@@ -106,13 +106,13 @@ export function useOAuthLogin(
     }
   }
 
-  const handleDiscordLogin = async (registrationCode?: string) => {
+  const handleDiscordLogin = async () => {
     if (!status?.discord_client_id) return
 
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await createOAuthFlow('discord', 'login', registrationCode)
+      const state = await createOAuthFlow('discord', 'login')
       rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildDiscordOAuthUrl(status.discord_client_id, state)
@@ -126,13 +126,13 @@ export function useOAuthLogin(
     }
   }
 
-  const handleOIDCLogin = async (registrationCode?: string) => {
+  const handleOIDCLogin = async () => {
     if (!status?.oidc_authorization_endpoint || !status?.oidc_client_id) return
 
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await createOAuthFlow('oidc', 'login', registrationCode)
+      const state = await createOAuthFlow('oidc', 'login')
       rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildOIDCOAuthUrl(
@@ -150,13 +150,13 @@ export function useOAuthLogin(
     }
   }
 
-  const handleLinuxDOLogin = async (registrationCode?: string) => {
+  const handleLinuxDOLogin = async () => {
     if (!status?.linuxdo_client_id) return
 
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await createOAuthFlow('linuxdo', 'login', registrationCode)
+      const state = await createOAuthFlow('linuxdo', 'login')
       rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildLinuxDOOAuthUrl(status.linuxdo_client_id, state)
@@ -170,7 +170,7 @@ export function useOAuthLogin(
     }
   }
 
-  const handleTelegramLogin = async (registrationCode?: string) => {
+  const handleTelegramLogin = async () => {
     if (!status?.telegram_oauth_configured) {
       toast.error(
         t(
@@ -181,13 +181,7 @@ export function useOAuthLogin(
     }
     setIsLoading(true)
     try {
-      const authorization = await createOAuthAuthorization(
-        'telegram',
-        'login',
-        undefined,
-        undefined,
-        registrationCode
-      )
+      const authorization = await createOAuthAuthorization('telegram', 'login')
       if (!authorization.authorizationUrl) {
         throw new AuthOperationError('Failed to initialize OAuth')
       }
@@ -201,20 +195,13 @@ export function useOAuthLogin(
     }
   }
 
-  const handleCustomOAuthLogin = async (
-    provider: CustomOAuthProviderInfo,
-    registrationCode?: string
-  ) => {
+  const handleCustomOAuthLogin = async (provider: CustomOAuthProviderInfo) => {
     if (!provider.authorization_endpoint || !provider.client_id) return
 
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await createOAuthFlow(
-        provider.slug,
-        'login',
-        registrationCode
-      )
+      const state = await createOAuthFlow(provider.slug, 'login')
       rememberOAuthLoginRedirect(state, redirectTo)
 
       const redirectUri = `${window.location.origin}/oauth/${provider.slug}`

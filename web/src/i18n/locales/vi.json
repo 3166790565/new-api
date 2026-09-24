@@ -1,5 +1,12 @@
 {
   "translation": {
+    "One more step": "Chỉ còn một bước",
+    "Changed your mind?": "Đổi ý rồi?",
+    "Back to sign in": "Quay lại đăng nhập",
+    "Invalid registration code": "Mã đăng ký không hợp lệ",
+    "Please enter your registration code": "Vui lòng nhập mã đăng ký",
+    "Your sign-up session has expired. Please sign in again.": "Phiên đăng ký đã hết hạn. Vui lòng đăng nhập lại.",
+    "Creating a new account requires a registration code. Enter it below to finish signing up.": "Tạo tài khoản mới yêu cầu mã đăng ký. Nhập mã bên dưới để hoàn tất đăng ký.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

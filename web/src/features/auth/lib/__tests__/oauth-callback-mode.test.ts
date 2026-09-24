@@ -16,11 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import {
+  clearPendingOAuthRegistration,
   getOAuthSessionStorage,
   markOAuthPopup,
+  readPendingOAuthRegistration,
+  rememberPendingOAuthRegistration,
   resolveOAuthCallbackMode,
   type OAuthModeStorage,
 } from '../oauth-callback-mode'
@@ -189,5 +192,76 @@ describe('OAuth bind popup storage', () => {
         'bind'
       )
     ).toBe(false)
+  })
+})
+
+describe('pending OAuth registration', () => {
+  beforeEach(() => window.sessionStorage.clear())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    window.sessionStorage.clear()
+  })
+
+  const pending = {
+    registerToken: 'register-token',
+    provider: 'oidc',
+    redirect: '/console/personal',
+  }
+
+  test('round-trips a parked registration and clears it on demand', () => {
+    expect(rememberPendingOAuthRegistration(pending)).toBe(true)
+    expect(readPendingOAuthRegistration()).toEqual(pending)
+
+    clearPendingOAuthRegistration()
+    expect(readPendingOAuthRegistration()).toBe(null)
+  })
+
+  test('reads null when nothing is parked', () => {
+    expect(readPendingOAuthRegistration()).toBe(null)
+  })
+
+  test('refuses to park a registration without a token and stores nothing', () => {
+    expect(
+      rememberPendingOAuthRegistration({ registerToken: '', provider: 'oidc' })
+    ).toBe(false)
+    expect(readPendingOAuthRegistration()).toBe(null)
+  })
+
+  test('ignores malformed or incomplete parked data', () => {
+    window.sessionStorage.setItem('oauth_register_pending', 'not-json')
+    expect(readPendingOAuthRegistration()).toBe(null)
+
+    window.sessionStorage.setItem(
+      'oauth_register_pending',
+      JSON.stringify({ provider: 'oidc' })
+    )
+    expect(readPendingOAuthRegistration()).toBe(null)
+
+    window.sessionStorage.setItem(
+      'oauth_register_pending',
+      JSON.stringify({ registerToken: 'register-token' })
+    )
+    expect(readPendingOAuthRegistration()).toBe(null)
+  })
+
+  test('degrades to false or null when storage throws', () => {
+    const throwing = {
+      getItem: () => {
+        throw new Error('blocked')
+      },
+      setItem: () => {
+        throw new Error('blocked')
+      },
+      removeItem: () => {
+        throw new Error('blocked')
+      },
+    }
+    vi.spyOn(window, 'sessionStorage', 'get').mockReturnValue(
+      throwing as unknown as Storage
+    )
+
+    expect(rememberPendingOAuthRegistration(pending)).toBe(false)
+    expect(readPendingOAuthRegistration()).toBe(null)
+    expect(() => clearPendingOAuthRegistration()).not.toThrow()
   })
 })

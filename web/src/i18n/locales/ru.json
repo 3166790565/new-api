@@ -1,5 +1,12 @@
 {
   "translation": {
+    "One more step": "Ещё один шаг",
+    "Changed your mind?": "Передумали?",
+    "Back to sign in": "Вернуться ко входу",
+    "Invalid registration code": "Неверный регистрационный код",
+    "Please enter your registration code": "Введите регистрационный код",
+    "Your sign-up session has expired. Please sign in again.": "Сессия регистрации истекла. Пожалуйста, войдите снова.",
+    "Creating a new account requires a registration code. Enter it below to finish signing up.": "Для создания новой учётной записи требуется регистрационный код. Введите его ниже, чтобы завершить регистрацию.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

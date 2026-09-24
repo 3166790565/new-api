@@ -16,6 +16,7 @@ import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as UserAgreementRouteImport } from './routes/user-agreement'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
 import { Route as authOauthRouteImport } from './routes/(auth)/oauth'
+import { Route as authOauthRegisterCodeRouteImport } from './routes/(auth)/oauth-register-code'
 import { Route as authOtpRouteImport } from './routes/(auth)/otp'
 import { Route as authRegisterRouteImport } from './routes/(auth)/register'
 import { Route as authResetRouteImport } from './routes/(auth)/reset'
@@ -108,6 +109,11 @@ const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
 const authOauthRoute = authOauthRouteImport.update({
   id: '/oauth',
   path: '/oauth',
+  getParentRoute: () => authRouteRoute,
+} as any)
+const authOauthRegisterCodeRoute = authOauthRegisterCodeRouteImport.update({
+  id: '/oauth-register-code',
+  path: '/oauth-register-code',
   getParentRoute: () => authRouteRoute,
 } as any)
 const authOtpRoute = authOtpRouteImport.update({
@@ -457,6 +463,7 @@ export interface FileRoutesByFullPath {
   '/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   '/forgot-password': typeof authForgotPasswordRoute
   '/oauth': typeof authOauthRoute
+  '/oauth-register-code': typeof authOauthRegisterCodeRoute
   '/otp': typeof authOtpRoute
   '/register': typeof authRegisterRoute
   '/reset': typeof authResetRoute
@@ -523,6 +530,7 @@ export interface FileRoutesByTo {
   '/user-agreement': typeof UserAgreementRoute
   '/forgot-password': typeof authForgotPasswordRoute
   '/oauth': typeof authOauthRoute
+  '/oauth-register-code': typeof authOauthRegisterCodeRoute
   '/otp': typeof authOtpRoute
   '/register': typeof authRegisterRoute
   '/reset': typeof authResetRoute
@@ -593,6 +601,7 @@ export interface FileRoutesById {
   '/_authenticated/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   '/(auth)/forgot-password': typeof authForgotPasswordRoute
   '/(auth)/oauth': typeof authOauthRoute
+  '/(auth)/oauth-register-code': typeof authOauthRegisterCodeRoute
   '/(auth)/otp': typeof authOtpRoute
   '/(auth)/register': typeof authRegisterRoute
   '/(auth)/reset': typeof authResetRoute
@@ -662,6 +671,7 @@ export interface FileRouteTypes {
     | '/system-settings'
     | '/forgot-password'
     | '/oauth'
+    | '/oauth-register-code'
     | '/otp'
     | '/register'
     | '/reset'
@@ -728,6 +738,7 @@ export interface FileRouteTypes {
     | '/user-agreement'
     | '/forgot-password'
     | '/oauth'
+    | '/oauth-register-code'
     | '/otp'
     | '/register'
     | '/reset'
@@ -797,6 +808,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings'
     | '/(auth)/forgot-password'
     | '/(auth)/oauth'
+    | '/(auth)/oauth-register-code'
     | '/(auth)/otp'
     | '/(auth)/register'
     | '/(auth)/reset'
@@ -926,6 +938,13 @@ declare module '@tanstack/react-router' {
       path: '/oauth'
       fullPath: '/oauth'
       preLoaderRoute: typeof authOauthRouteImport
+      parentRoute: typeof authRouteRoute
+    }
+    '/(auth)/oauth-register-code': {
+      id: '/(auth)/oauth-register-code'
+      path: '/oauth-register-code'
+      fullPath: '/oauth-register-code'
+      preLoaderRoute: typeof authOauthRegisterCodeRouteImport
       parentRoute: typeof authRouteRoute
     }
     '/(auth)/otp': {
@@ -1354,6 +1373,7 @@ declare module '@tanstack/react-router' {
 interface authRouteRouteChildren {
   authForgotPasswordRoute: typeof authForgotPasswordRoute
   authOauthRoute: typeof authOauthRoute
+  authOauthRegisterCodeRoute: typeof authOauthRegisterCodeRoute
   authOtpRoute: typeof authOtpRoute
   authRegisterRoute: typeof authRegisterRoute
   authResetRoute: typeof authResetRoute
@@ -1365,6 +1385,7 @@ interface authRouteRouteChildren {
 const authRouteRouteChildren: authRouteRouteChildren = {
   authForgotPasswordRoute: authForgotPasswordRoute,
   authOauthRoute: authOauthRoute,
+  authOauthRegisterCodeRoute: authOauthRegisterCodeRoute,
   authOtpRoute: authOtpRoute,
   authRegisterRoute: authRegisterRoute,
   authResetRoute: authResetRoute,

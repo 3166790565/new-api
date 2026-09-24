@@ -172,8 +172,7 @@ export async function createOAuthAuthorization(
   intent: 'login' | 'bind' | 'verify',
   operation?: VerificationOperation,
   signal?: AbortSignal,
-  proofToken?: string,
-  registrationCode?: string
+  proofToken?: string
 ): Promise<{ state: string; authorizationUrl?: string }> {
   const aff = intent === 'login' ? getAffiliateCode() : ''
   const res = await api.post(
@@ -184,7 +183,6 @@ export async function createOAuthAuthorization(
       aff: aff || undefined,
       scope: operation?.scope,
       ...(operation?.context ? { context: operation.context } : {}),
-      ...(registrationCode ? { registration_code: registrationCode } : {}),
     },
     {
       skipAuthRefresh: intent === 'login',
@@ -215,20 +213,33 @@ export async function createOAuthAuthorization(
 export async function createOAuthFlow(
   provider: string,
   intent: 'login' | 'bind' | 'verify',
-  registrationCode?: string,
   operation?: VerificationOperation,
   signal?: AbortSignal
 ): Promise<string> {
-  return (
-    await createOAuthAuthorization(
-      provider,
-      intent,
-      operation,
-      signal,
-      undefined,
-      registrationCode
-    )
-  ).state
+  return (await createOAuthAuthorization(provider, intent, operation, signal))
+    .state
+}
+
+// Complete a deferred OAuth sign-up by supplying the registration code. The
+// provider identity was already verified on the callback and parked server-side
+// under the register token; this creates the account and issues a session.
+export async function completeOAuthRegistration(
+  registerToken: string,
+  registrationCode: string
+): Promise<LoginResponse> {
+  const res = await api.post<LoginResponse>(
+    '/api/oauth/register',
+    {
+      register_token: registerToken,
+      registration_code: registrationCode,
+    },
+    {
+      skipAuthRefresh: true,
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
+  return res.data
 }
 
 // WeChat login by authorization code

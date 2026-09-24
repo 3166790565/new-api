@@ -1,5 +1,12 @@
 {
   "translation": {
+    "One more step": "あと一歩",
+    "Changed your mind?": "気が変わりましたか？",
+    "Back to sign in": "サインインに戻る",
+    "Invalid registration code": "登録コードが無効です",
+    "Please enter your registration code": "登録コードを入力してください",
+    "Your sign-up session has expired. Please sign in again.": "サインアップセッションの有効期限が切れました。もう一度サインインしてください。",
+    "Creating a new account requires a registration code. Enter it below to finish signing up.": "新しいアカウントの作成には登録コードが必要です。以下に入力してサインアップを完了してください。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

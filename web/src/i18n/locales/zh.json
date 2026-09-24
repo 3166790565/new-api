@@ -1,5 +1,12 @@
 {
   "translation": {
+    "One more step": "还差一步",
+    "Changed your mind?": "改变主意了？",
+    "Back to sign in": "返回登录",
+    "Invalid registration code": "注册码无效",
+    "Please enter your registration code": "请输入注册码",
+    "Your sign-up session has expired. Please sign in again.": "注册会话已过期，请重新登录。",
+    "Creating a new account requires a registration code. Enter it below to finish signing up.": "创建新账户需要注册码。请在下方输入以完成注册。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

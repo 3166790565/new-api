@@ -422,11 +422,6 @@ export function SignUpForm({
             onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
             isWeChatLoading={isWeChatSubmitting}
             registrationCodeRequired={registrationCodeRequired}
-            registrationCode={
-              registrationCodeRequired
-                ? form.getValues('registration_code')
-                : undefined
-            }
             className='pt-2'
           />
         )}

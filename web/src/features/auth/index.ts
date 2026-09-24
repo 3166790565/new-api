@@ -29,6 +29,7 @@ export {
   sendEmailVerification,
   bindEmail,
   createOAuthFlow,
+  completeOAuthRegistration,
   githubOAuthStart,
   wechatLoginByCode,
   telegramLogin,
@@ -115,4 +116,5 @@ export { LegalConsent } from './components/legal-consent'
 export { SignIn } from './sign-in'
 export { SignUp } from './sign-up'
 export { ForgotPassword } from './forgot-password'
+export { OAuthRegisterCode } from './oauth-register-code'
 export { Otp } from './otp'

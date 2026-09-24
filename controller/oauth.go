@@ -32,13 +32,28 @@ type oauthStateRequest struct {
 }
 
 type oauthFlowPayload struct {
-	AffiliateCode    string                         `json:"affiliate_code,omitempty"`
-	Verification     *service.OAuthVerificationFlow `json:"verification,omitempty"`
-	Telegram         *oauth.TelegramOAuthFlow       `json:"telegram,omitempty"`
-	SessionIdentity  *service.AuthIdentity          `json:"session_identity,omitempty"`
-	Authorization    *model.AuthFlowAuthorization   `json:"authorization,omitempty"`
-	RegistrationCode string                         `json:"registration_code,omitempty"`
+	AffiliateCode   string                         `json:"affiliate_code,omitempty"`
+	Verification    *service.OAuthVerificationFlow `json:"verification,omitempty"`
+	Telegram        *oauth.TelegramOAuthFlow       `json:"telegram,omitempty"`
+	SessionIdentity *service.AuthIdentity          `json:"session_identity,omitempty"`
+	Authorization   *model.AuthFlowAuthorization   `json:"authorization,omitempty"`
 }
+
+// oauthNewUserSeed carries a provider identity the callback has already
+// verified but not yet turned into an account, so registration-code entry can
+// complete the sign-up on a separate step. It holds no secrets and no code.
+type oauthNewUserSeed struct {
+	ProviderUserID string `json:"provider_user_id"`
+	Username       string `json:"username,omitempty"`
+	DisplayName    string `json:"display_name,omitempty"`
+	Email          string `json:"email,omitempty"`
+	AffiliateCode  string `json:"affiliate_code,omitempty"`
+}
+
+// oauthRegistrationCodeRequiredCode is the machine code the OAuth callback
+// returns when a new account needs a registration code; the frontend routes on
+// it to the standalone registration-code page.
+const oauthRegistrationCodeRequiredCode = "REGISTRATION_CODE_REQUIRED"
 
 // providerParams returns map with Provider key for i18n templates
 func providerParams(name string) map[string]any {
@@ -63,22 +78,9 @@ func GenerateOAuthCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	// 注册码开启时，OAuth 登录（意图 login，可能首次建号）必须在发起时携带注册码，
-	// 否则回调阶段无请求体可取码。
-	if common.RegistrationCodeEnabled && request.Intent == model.AuthFlowIntentLogin {
-		regCode := model.NormalizeRegistrationCodeValue(request.RegistrationCode)
-		if regCode == "" {
-			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeRequired)
-			return
-		}
-		if err := model.CheckRegistrationCodeUsable(regCode); err != nil {
-			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeInvalid)
-			return
-		}
-	}
 	userID := 0
 	sessionID := ""
-	flowPayload := oauthFlowPayload{AffiliateCode: request.Aff, RegistrationCode: model.NormalizeRegistrationCodeValue(request.RegistrationCode)}
+	flowPayload := oauthFlowPayload{AffiliateCode: request.Aff}
 	bindingStarted := false
 	if request.Provider == "telegram" {
 		telegramFlow, err := oauth.NewTelegramOAuthFlow()
@@ -331,13 +333,13 @@ func handleOAuthVerification(c *gin.Context, provider string, oauthUser *oauth.O
 }
 
 func handleOAuthLogin(c *gin.Context, provider oauth.Provider, oauthUser *oauth.OAuthUser, token *oauth.OAuthToken, flow *model.AuthFlow) {
-	// 7. Find or create user
+	// 7. Find the existing user, or resolve a seed for a new account.
 	var payload oauthFlowPayload
 	if err := common.UnmarshalJsonStr(flow.Payload, &payload); err != nil {
 		writeSecurityOperationError(c, err)
 		return
 	}
-	user, migration, err := findOrCreateOAuthUser(c, provider, oauthUser, token, payload.AffiliateCode, payload.RegistrationCode)
+	user, migration, seed, err := findOrCreateOAuthUser(c, provider, oauthUser, token, payload.AffiliateCode)
 	if err != nil {
 		if errors.Is(err, model.ErrEmailAlreadyTaken) {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
@@ -358,6 +360,23 @@ func handleOAuthLogin(c *gin.Context, provider oauth.Provider, oauthUser *oauth.
 		return
 	}
 
+	// New account. When registration codes are enabled the identity is parked in
+	// a short-lived, single-use flow and the caller is sent to the standalone
+	// registration-code page; otherwise create and log in right away.
+	if seed != nil {
+		if common.RegistrationCodeEnabled {
+			startOAuthRegistrationFlow(c, flow.Provider, seed)
+			return
+		}
+		created, err := createOAuthUserFromSeed(c, provider, seed, "")
+		if err != nil {
+			writeOAuthCreateError(c, err)
+			return
+		}
+		setupLogin(created, nil, c)
+		return
+	}
+
 	// 8. Check user status
 	if user.Status != common.UserStatusEnabled {
 		common.ApiErrorI18n(c, i18n.MsgOAuthUserBanned)
@@ -366,6 +385,130 @@ func handleOAuthLogin(c *gin.Context, provider oauth.Provider, oauthUser *oauth.
 
 	// 9. Setup login
 	setupLogin(user, migration, c)
+}
+
+// startOAuthRegistrationFlow parks a verified provider identity in a single-use,
+// short-lived flow and tells the frontend a registration code is still required.
+func startOAuthRegistrationFlow(c *gin.Context, providerSlug string, seed *oauthNewUserSeed) {
+	payload, err := common.Marshal(seed)
+	if err != nil {
+		writeSecurityOperationError(c, err)
+		return
+	}
+	expiresAt := time.Now().Add(oauthAuthFlowTTL)
+	registerToken, _, err := model.CreateAuthFlow(model.AuthFlowCreate{
+		Purpose:   model.AuthFlowPurposeOAuthRegister,
+		Provider:  providerSlug,
+		Intent:    model.AuthFlowIntentLogin,
+		Payload:   string(payload),
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		writeSecurityOperationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": false,
+		"code":    oauthRegistrationCodeRequiredCode,
+		"message": i18n.T(c, i18n.MsgRegistrationCodeRequired),
+		"data": gin.H{
+			"register_token": registerToken,
+			"provider":       providerSlug,
+			"expires_at":     expiresAt.Unix(),
+		},
+	})
+}
+
+// CompleteOAuthRegistration finishes a deferred OAuth sign-up: it validates the
+// parked identity flow and the supplied registration code, then creates the
+// account and issues a session. It runs before login like the OAuth callback.
+func CompleteOAuthRegistration(c *gin.Context) {
+	if !common.RegisterEnabled {
+		common.ApiErrorI18n(c, i18n.MsgUserRegisterDisabled)
+		return
+	}
+	var request struct {
+		RegisterToken    string `json:"register_token"`
+		RegistrationCode string `json:"registration_code"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	registerToken := strings.TrimSpace(request.RegisterToken)
+	if registerToken == "" {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	flow, err := model.GetAuthFlow(registerToken, model.AuthFlowMatch{Purpose: model.AuthFlowPurposeOAuthRegister})
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": i18n.T(c, i18n.MsgOAuthStateInvalid)})
+		return
+	}
+	provider := oauth.GetProvider(flow.Provider)
+	if provider == nil || !provider.IsEnabled() {
+		common.ApiErrorI18n(c, i18n.MsgOAuthNotEnabled, providerParams(flow.Provider))
+		return
+	}
+	var seed oauthNewUserSeed
+	if err := common.UnmarshalJsonStr(flow.Payload, &seed); err != nil || seed.ProviderUserID == "" {
+		writeSecurityOperationError(c, model.ErrAuthFlowInvalid)
+		return
+	}
+
+	// Validate the code without consuming it, so a wrong code lets the user retry
+	// on the same page without burning the parked flow. If the operator turned the
+	// gate off in the meantime, just finish the sign-up.
+	regCode := ""
+	if common.RegistrationCodeEnabled {
+		regCode = model.NormalizeRegistrationCodeValue(request.RegistrationCode)
+		if regCode == "" {
+			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeRequired)
+			return
+		}
+		if err := model.CheckRegistrationCodeUsable(regCode); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgRegistrationCodeInvalid)
+			return
+		}
+	}
+
+	// Guard against a duplicate account when the same identity completes twice
+	// (e.g. two tabs); send them back through login instead.
+	if provider.IsUserIDTaken(seed.ProviderUserID) {
+		common.ApiErrorI18n(c, i18n.MsgOAuthAlreadyBound, providerParams(provider.GetName()))
+		return
+	}
+
+	// Consume the parked flow once; replay/expiry is rejected atomically.
+	if _, err := model.ConsumeAuthFlow(registerToken, model.AuthFlowMatch{Purpose: model.AuthFlowPurposeOAuthRegister}); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": i18n.T(c, i18n.MsgOAuthStateInvalid)})
+		return
+	}
+
+	user, err := createOAuthUserFromSeed(c, provider, &seed, regCode)
+	if err != nil {
+		writeOAuthCreateError(c, err)
+		return
+	}
+	setupLogin(user, nil, c)
+}
+
+// writeOAuthCreateError maps the errors createOAuthUserFromSeed can return to a
+// translated response. Shared by the callback (no-code) path and the completion
+// endpoint.
+func writeOAuthCreateError(c *gin.Context, err error) {
+	if errors.Is(err, model.ErrEmailAlreadyTaken) {
+		common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
+		return
+	}
+	switch err.(type) {
+	case *OAuthEmailAlreadyTakenError:
+		common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
+	case *OAuthRegistrationCodeInvalidError:
+		common.ApiErrorI18n(c, i18n.MsgRegistrationCodeInvalid)
+	default:
+		writeSecurityOperationError(c, err)
+	}
 }
 
 // handleOAuthBind handles binding OAuth account to existing user
@@ -418,30 +561,32 @@ func handleOAuthBind(c *gin.Context, providerName string, provider oauth.Provide
 	return true, notificationFailed
 }
 
-// findOrCreateOAuthUser finds the existing user or creates a new one. For a
-// legacy GitHub binding that still waits for the login verification, it also
-// returns the rewrite to carry into the challenge.
-func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *oauth.OAuthUser, token *oauth.OAuthToken, affiliateCode string, registrationCode string) (*model.User, *service.LegacyGitHubMigration, error) {
+// findOrCreateOAuthUser resolves the existing user for a provider identity. It
+// never creates the account: when the identity is new it returns an
+// oauthNewUserSeed so the caller can decide whether a registration code is
+// required first. For a legacy GitHub binding still awaiting login verification
+// it also returns the rewrite to carry into the challenge.
+func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *oauth.OAuthUser, token *oauth.OAuthToken, affiliateCode string) (*model.User, *service.LegacyGitHubMigration, *oauthNewUserSeed, error) {
 	user := &model.User{}
 	if provider.ProviderUserIDColumn() == "telegram_id" {
 		err := provider.FillUserByProviderID(user, oauthUser.ProviderUserID)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, oauth.ErrTelegramAccountNotBound
+			return nil, nil, nil, oauth.ErrTelegramAccountNotBound
 		}
-		return user, nil, err
+		return user, nil, nil, err
 	}
 
 	// Check if user already exists with new ID
 	if provider.IsUserIDTaken(oauthUser.ProviderUserID) {
 		err := provider.FillUserByProviderID(user, oauthUser.ProviderUserID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		// Check if user has been deleted
 		if user.Id == 0 {
-			return nil, nil, &OAuthUserDeletedError{}
+			return nil, nil, nil, &OAuthUserDeletedError{}
 		}
-		return user, nil, nil
+		return user, nil, nil, nil
 	}
 
 	// Legacy GitHub bindings stored the login name, which only points at a
@@ -450,17 +595,17 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	legacyID, _ := oauthUser.Extra["legacy_id"].(string)
 	if strings.ContainsFunc(legacyID, func(r rune) bool { return r < '0' || r > '9' }) && provider.IsUserIDTaken(legacyID) {
 		if err := provider.FillUserByProviderID(user, legacyID); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if user.Id != 0 {
 			state, err := model.GetUserVerificationState(user.Id)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			if state.HasTwoFA || state.HasPasskey {
 				// The rewrite is written in the transaction that issues the session
 				// once the login verification completes.
-				return user, &service.LegacyGitHubMigration{GitHubID: oauthUser.ProviderUserID, LegacyID: legacyID}, nil
+				return user, &service.LegacyGitHubMigration{GitHubID: oauthUser.ProviderUserID, LegacyID: legacyID}, nil, nil
 			}
 			// Without a second factor, one of the addresses the provider has
 			// confirmed must match the account email. The list is fetched only here
@@ -477,7 +622,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 			}
 			if !matched {
 				recordLegacyGitHubBindingAudit(c, user, false, map[string]any{"legacy_id": legacyID, "provider_user_id": oauthUser.ProviderUserID, "reason": reason})
-				return nil, nil, &OAuthLegacyBindingNotConfirmedError{}
+				return nil, nil, nil, &OAuthLegacyBindingNotConfirmedError{}
 			}
 			written := false
 			err = model.DB.Transaction(func(tx *gorm.DB) error {
@@ -486,7 +631,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 				return err
 			})
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			if written {
 				user.GitHubId = oauthUser.ProviderUserID
@@ -496,52 +641,56 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 					"verified_email_matched": true, "notification_failed": notificationFailed,
 				})
 			}
-			return user, nil, nil
+			return user, nil, nil, nil
 		}
 	}
 
-	// User doesn't exist, create new user if registration is enabled
+	// User doesn't exist. Registration must be enabled to proceed; the actual
+	// account creation is deferred to createOAuthUserFromSeed so a registration
+	// code can be collected first when required.
 	if !common.RegisterEnabled {
-		return nil, nil, &OAuthRegistrationDisabledError{}
+		return nil, nil, nil, &OAuthRegistrationDisabledError{}
 	}
-	// 注册码开启时，OAuth 首次建号也必须持有有效注册码。码由用户在注册页填写后
-	// 随 /api/oauth/state 传入 flow payload；回调阶段无请求体，只能在这里校验。
-	if common.RegistrationCodeEnabled {
-		regCode := model.NormalizeRegistrationCodeValue(registrationCode)
-		if regCode == "" {
-			return nil, nil, &OAuthRegistrationCodeRequiredError{}
-		}
-		if err := model.CheckRegistrationCodeUsable(regCode); err != nil {
-			return nil, nil, &OAuthRegistrationCodeInvalidError{err}
-		}
-	}
+	return nil, nil, &oauthNewUserSeed{
+		ProviderUserID: oauthUser.ProviderUserID,
+		Username:       oauthUser.Username,
+		DisplayName:    oauthUser.DisplayName,
+		Email:          oauthUser.Email,
+		AffiliateCode:  affiliateCode,
+	}, nil
+}
 
-	// Set up new user
+// createOAuthUserFromSeed turns a verified provider identity into an account. It
+// runs on the callback path when no registration code is required, and from
+// CompleteOAuthRegistration once the user has supplied a valid one. When
+// registration codes are enabled the code is consumed atomically before the
+// account is written; a create failure afterwards records a compensation audit.
+func createOAuthUserFromSeed(c *gin.Context, provider oauth.Provider, seed *oauthNewUserSeed, registrationCode string) (*model.User, error) {
+	user := &model.User{}
 	user.Username = provider.GetProviderPrefix() + strconv.Itoa(model.GetMaxUserId()+1)
-
-	if oauthUser.Username != "" {
-		if exists, err := model.CheckUserExistOrDeleted(oauthUser.Username, ""); err == nil && !exists {
+	if seed.Username != "" {
+		if exists, err := model.CheckUserExistOrDeleted(seed.Username, ""); err == nil && !exists {
 			// 防止索引退化
-			if len(oauthUser.Username) <= model.UserNameMaxLength {
-				user.Username = oauthUser.Username
+			if len(seed.Username) <= model.UserNameMaxLength {
+				user.Username = seed.Username
 			}
 		}
 	}
 
-	if oauthUser.DisplayName != "" {
-		user.DisplayName = oauthUser.DisplayName
-	} else if oauthUser.Username != "" {
-		user.DisplayName = oauthUser.Username
+	if seed.DisplayName != "" {
+		user.DisplayName = seed.DisplayName
+	} else if seed.Username != "" {
+		user.DisplayName = seed.Username
 	} else {
 		user.DisplayName = provider.GetName() + " User"
 	}
-	if oauthUser.Email != "" {
-		user.Email = model.NormalizeEmail(oauthUser.Email)
+	if seed.Email != "" {
+		user.Email = model.NormalizeEmail(seed.Email)
 		if err := model.EnsureEmailAvailable(user.Email, 0); err != nil {
 			if errors.Is(err, model.ErrEmailAlreadyTaken) {
-				return nil, nil, &OAuthEmailAlreadyTakenError{}
+				return nil, &OAuthEmailAlreadyTakenError{}
 			}
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	user.Role = common.RoleCommonUser
@@ -549,17 +698,17 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 
 	// Handle affiliate code
 	inviterId := 0
-	if affiliateCode != "" {
-		inviterId, _ = model.GetUserIdByAffCode(affiliateCode)
+	if seed.AffiliateCode != "" {
+		inviterId, _ = model.GetUserIdByAffCode(seed.AffiliateCode)
 	}
 
-	// 注册码开启时，在建号前原子消费。OAuth 是多跳流程，回调阶段无法在建号
-	// 之后补消费；若消费成功但建号失败，写补偿审计供运维对账。
+	// 注册码开启时，在建号前原子消费。OAuth 是多跳流程；若消费成功但建号失败，
+	// 写补偿审计供运维对账。
 	consumedRcID := 0
 	if common.RegistrationCodeEnabled {
 		rcID, _, err := model.ConsumeRegistrationCode(registrationCode)
 		if err != nil {
-			return nil, nil, &OAuthRegistrationCodeInvalidError{err}
+			return nil, &OAuthRegistrationCodeInvalidError{err}
 		}
 		consumedRcID = rcID
 	}
@@ -577,19 +726,15 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 			binding := &model.UserOAuthBinding{
 				UserId:         user.Id,
 				ProviderId:     genericProvider.GetProviderId(),
-				ProviderUserId: oauthUser.ProviderUserID,
+				ProviderUserId: seed.ProviderUserID,
 			}
-			if err := model.CreateUserOAuthBindingWithTx(tx, binding); err != nil {
-				return err
-			}
-
-			return nil
+			return model.CreateUserOAuthBindingWithTx(tx, binding)
 		})
 		if err != nil {
 			if consumedRcID > 0 {
 				recordOAuthRegistrationCodeCompensation(c, consumedRcID, "oauth_user_create_failed")
 			}
-			return nil, nil, err
+			return nil, err
 		}
 
 		// Perform post-transaction tasks (logs, sidebar config, inviter rewards)
@@ -603,32 +748,28 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 			}
 
 			// Set the provider user ID on the user model and update
-			provider.SetProviderUserID(user, oauthUser.ProviderUserID)
-			if err := tx.Model(user).Updates(map[string]any{
+			provider.SetProviderUserID(user, seed.ProviderUserID)
+			return tx.Model(user).Updates(map[string]any{
 				"github_id":   user.GitHubId,
 				"discord_id":  user.DiscordId,
 				"oidc_id":     user.OidcId,
 				"linux_do_id": user.LinuxDOId,
 				"wechat_id":   user.WeChatId,
 				"telegram_id": user.TelegramId,
-			}).Error; err != nil {
-				return err
-			}
-
-			return nil
+			}).Error
 		})
 		if err != nil {
 			if consumedRcID > 0 {
 				recordOAuthRegistrationCodeCompensation(c, consumedRcID, "oauth_user_create_failed")
 			}
-			return nil, nil, err
+			return nil, err
 		}
 
 		// Perform post-transaction tasks
 		user.FinalizeOAuthUserCreation(inviterId)
 	}
 
-	return user, nil, nil
+	return user, nil
 }
 
 // recordLegacyGitHubBindingAudit records the outcome of a legacy GitHub binding
@@ -652,12 +793,6 @@ type OAuthRegistrationDisabledError struct{}
 
 func (e *OAuthRegistrationDisabledError) Error() string {
 	return "registration is disabled"
-}
-
-type OAuthRegistrationCodeRequiredError struct{}
-
-func (e *OAuthRegistrationCodeRequiredError) Error() string {
-	return "a registration code is required"
 }
 
 type OAuthRegistrationCodeInvalidError struct {
@@ -712,10 +847,6 @@ func handleOAuthError(c *gin.Context, err error) {
 		common.ApiErrorMsg(c, e.Message)
 	case *oauth.TrustLevelError:
 		common.ApiErrorI18n(c, i18n.MsgOAuthTrustLevelLow)
-	case *OAuthRegistrationCodeRequiredError:
-		common.ApiErrorI18n(c, i18n.MsgRegistrationCodeRequired)
-	case *OAuthRegistrationCodeInvalidError:
-		common.ApiErrorI18n(c, i18n.MsgRegistrationCodeInvalid)
 	default:
 		writeSecurityOperationError(c, err)
 	}

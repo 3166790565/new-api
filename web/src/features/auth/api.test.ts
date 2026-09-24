@@ -23,11 +23,28 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { api, type RefreshOutcome } from '@/lib/api'
 import type { AuthBundle } from '@/stores/auth-store'
 
-import { executeLogout } from './api'
+import { executeLogout, completeOAuthRegistration } from './api'
 import { useOAuthLogin } from './hooks/use-oauth-login'
 import { consumeOAuthLoginRedirect } from './lib/oauth-callback-mode'
 
 afterEach(() => vi.restoreAllMocks())
+
+test('completeOAuthRegistration posts the register token and code, returns the response', async () => {
+  const post = vi.spyOn(api, 'post').mockResolvedValue({
+    data: { success: true, data: { access_token: 'token' } },
+  })
+  const res = await completeOAuthRegistration('register-token', 'CODE123')
+  expect(res).toEqual({ success: true, data: { access_token: 'token' } })
+  expect(post).toHaveBeenCalledWith(
+    '/api/oauth/register',
+    { register_token: 'register-token', registration_code: 'CODE123' },
+    expect.objectContaining({
+      skipAuthRefresh: true,
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    })
+  )
+})
 
 test.each([true, false])(
   'starts Telegram OAuth only when configuration is ready: %s',

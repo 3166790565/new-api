@@ -42,6 +42,7 @@ import {
 import {
   getOAuthSessionStorage,
   consumeOAuthLoginRedirect,
+  rememberPendingOAuthRegistration,
   resolveOAuthCallbackMode,
 } from '@/features/auth/lib/oauth-callback-mode'
 import type { LoginResponse } from '@/features/auth/types'
@@ -53,6 +54,21 @@ import { getServerErrorMessageKey } from '@/lib/server-error-message'
 type OAuthRequestConfig = AxiosRequestConfig & {
   skipBusinessError?: boolean
   skipAuthRefresh?: boolean
+}
+
+/**
+ * A brand-new third-party identity that the server deferred to the standalone
+ * registration-code page: `code` is `REGISTRATION_CODE_REQUIRED` and `data`
+ * carries the short-lived, single-use register token to complete the sign-up.
+ */
+const OAUTH_REGISTRATION_CODE_REQUIRED = 'REGISTRATION_CODE_REQUIRED'
+
+interface OAuthRegistrationRequiredResponse extends LoginResponse {
+  code?: string
+  data?: LoginResponse['data'] & {
+    register_token?: string
+    provider?: string
+  }
 }
 
 interface OAuthPopupResult {
@@ -236,6 +252,27 @@ function OAuthCallback() {
           ) {
             toast.success(i18next.t('Signed in successfully!'))
           }
+          return
+        }
+        // A brand-new third-party identity with the registration-code gate on:
+        // no account was created — park the verified identity and send the user
+        // to the standalone registration-code page to finish signing up.
+        const deferred = response.data as OAuthRegistrationRequiredResponse
+        if (
+          deferred?.code === OAUTH_REGISTRATION_CODE_REQUIRED &&
+          deferred.data?.register_token
+        ) {
+          completedLogin.current = loginKey
+          rememberPendingOAuthRegistration({
+            registerToken: deferred.data.register_token,
+            provider: deferred.data.provider ?? provider,
+            redirect:
+              sanitizeAuthRedirect(
+                search.redirect ?? consumeOAuthLoginRedirect(state),
+                window.location.origin
+              ) ?? undefined,
+          })
+          void navigate({ to: '/oauth-register-code', replace: true })
           return
         }
         const messageKey = getServerErrorMessageKey(response.data)

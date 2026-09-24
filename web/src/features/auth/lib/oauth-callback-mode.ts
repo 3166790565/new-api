@@ -42,6 +42,68 @@ export function consumeOAuthLoginRedirect(state: string): string | null {
   }
 }
 
+const OAUTH_REGISTER_PENDING_KEY = 'oauth_register_pending'
+
+/**
+ * A deferred OAuth sign-up parked by the callback: the provider identity was
+ * already verified server-side under `registerToken`, and the standalone
+ * registration-code page reads this to finish creating the account.
+ */
+export interface PendingOAuthRegistration {
+  registerToken: string
+  provider: string
+  redirect?: string
+}
+
+/**
+ * Persist a deferred OAuth sign-up so the registration-code page can complete
+ * it. The register token is short-lived and single-use server-side, so storing
+ * it in `sessionStorage` keeps it scoped to this tab and cleared on close.
+ */
+export function rememberPendingOAuthRegistration(
+  pending: PendingOAuthRegistration
+): boolean {
+  if (!pending.registerToken) return false
+  try {
+    window.sessionStorage.setItem(
+      OAUTH_REGISTER_PENDING_KEY,
+      JSON.stringify(pending)
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Read the parked OAuth sign-up without clearing it (survives page reloads). */
+export function readPendingOAuthRegistration(): PendingOAuthRegistration | null {
+  try {
+    const raw = window.sessionStorage.getItem(OAUTH_REGISTER_PENDING_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      typeof (parsed as PendingOAuthRegistration).registerToken !== 'string' ||
+      typeof (parsed as PendingOAuthRegistration).provider !== 'string'
+    ) {
+      return null
+    }
+    return parsed as PendingOAuthRegistration
+  } catch {
+    return null
+  }
+}
+
+/** Drop the parked OAuth sign-up once it is completed or abandoned. */
+export function clearPendingOAuthRegistration(): void {
+  try {
+    window.sessionStorage.removeItem(OAUTH_REGISTER_PENDING_KEY)
+  } catch {
+    // Nothing to clean up if storage is unavailable.
+  }
+}
+
 /** Minimal shape of `sessionStorage`, kept structural so tests can fake it. */
 export interface OAuthModeStorage {
   getItem: (key: string) => string | null

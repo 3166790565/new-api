@@ -16,6 +16,7 @@ import (
 
 const (
 	AuthFlowPurposeOAuth             = "oauth"
+	AuthFlowPurposeOAuthRegister     = "oauth_register"
 	AuthFlowPurposeTwoFALogin        = "2fa_login"
 	AuthFlowPurposeLoginVerification = "login_verification"
 	AuthFlowPurposeLoginPasskey      = "login_passkey"
