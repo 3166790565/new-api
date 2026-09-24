@@ -52,6 +52,30 @@
 - 管理页面位于 `web/src/features/registration-codes/`（路由 `/registration-codes`），开关集成在管理后台 →「认证设置」的基础认证区块；
 - 默认值为 `false`，以保证升级后行为不变（默认不强制注册码）。
 
+### 4. 管理员统计看板（`/statistics`）
+
+新增一个**仅管理员可见**的统计看板，聚焦「运营维度」的关键指标，与原有的额度/模型消耗看板互补：
+
+- **今日 KPI 卡片**：
+  - **日活人数**：当天去重调用过接口的用户数（每个用户当天多次调用只算一人）；
+  - **今日注册 / 今日登录**：来自 `users.created_at` / `last_login_at`；
+  - **今日访问人数**：按客户端 IP 每日去重，含未登录的匿名访客；
+  - **今日调用次数**：当日消费日志（`type=2`）总次数。
+- **近期趋势图**：近 N 天（7 / 14 / 30 可切换）的日活、访问、调用次数折线趋势。
+- **IP 地区分布**：按访客 IP 解析出的地区聚合，展示各地区人数。
+
+行为与隐私说明：
+
+- 地区解析使用**离线 IP 库（ip2region）**，全程在本地完成，**不会外发用户 IP**；库缺失时优雅降级为「未知」，不影响主流程。
+- 只落「地区聚合」与去重所需的 IP，不新增按用户的 IP 明细日志。
+
+实现要点：
+
+- 后端新增去重表 `stat_daily_active`（`model/statistics.go`），进程内内存缓存 + 唯一复合索引 `(day, kind, dedup_key)` 做跨实例去重；接口 `GET /api/statistics/overview` 由服务端 `middleware.AdminAuth()` 强校验（不依赖前端隐藏）；
+- 调用埋点接入 `RecordConsumeLog`，访问埋点接入 `router/web-router.go` 的 `NoRoute` 链；离线地区解析封装在 `common/ipgeo/`；
+- 前端页面位于 `web/src/features/statistics/`（路由 `/statistics`，管理员门禁），已补齐各语言 i18n 文案；
+- 离线地区库 `data/ip2region.xdb` 已随仓库提交并内置进 Docker 镜像（`/opt/new-api/data/ip2region.xdb`，位于挂载卷之外），无需额外下载。
+
 ## 许可与归属
 
 本仓库遵循原项目的开源许可协议，项目名称、品牌与作者归属（New API / QuantumNous）均保留自上游原项目。
