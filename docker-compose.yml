@@ -16,14 +16,18 @@ version: '3.4' # For compatibility with older Docker versions
 
 services:
   new-api:
-    # 从本仓库源码构建，而不是拉取官方远程镜像。
-    # Build from this repository's source instead of pulling the official remote image.
-    # 首次 `docker compose up -d` 会自动构建；改动源码后需用 `docker compose up -d --build` 重新构建。
-    # The first `docker compose up -d` builds automatically; after changing source you must
-    # rebuild with `docker compose up -d --build` (or `docker compose build`).
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # 拉取本地已构建并推送到 Docker Hub 的镜像，服务器端无需再编译。
+    # Pull the image built locally and pushed to Docker Hub; the server no longer needs to compile.
+    # 更新流程：本地 `docker build --platform linux/amd64 -t bxacc123/new-api:latest .` 后 `docker push`，
+    # 服务器再 `docker compose pull new-api && docker compose up -d`。
+    # Update flow: build & push locally, then on the server run
+    # `docker compose pull new-api && docker compose up -d`.
+    image: bxacc123/new-api:latest
+    # 若想改回从源码构建，注释掉上面的 image，取消注释下面的 build。
+    # To build from source instead, comment out the image above and uncomment the build below.
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: new-api
     restart: always
     command: --log-dir /app/logs
