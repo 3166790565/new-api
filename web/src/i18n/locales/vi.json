@@ -6928,6 +6928,20 @@
     "Max pending submissions per user": "Max pending submissions per user",
     "0 means no limit.": "0 means no limit.",
     "Current share": "Current share",
-    "Reveal the saved key for this channel.": "Reveal the saved key for this channel."
+    "Reveal the saved key for this channel.": "Reveal the saved key for this channel.",
+    "Statistics": "Thống kê",
+    "Active Users": "Người dùng hoạt động",
+    "Registrations": "Lượt đăng ký",
+    "Logins": "Lượt đăng nhập",
+    "Visitors": "Khách truy cập",
+    "Call Count": "Số lần gọi",
+    "Recent Trend": "Xu hướng gần đây",
+    "IP Region Distribution": "Phân bố khu vực IP",
+    "Last {{count}} days": "{{count}} ngày qua",
+    "Unique callers today": "Người gọi duy nhất hôm nay",
+    "New sign-ups today": "Đăng ký mới hôm nay",
+    "Users logged in today": "Người dùng đăng nhập hôm nay",
+    "Unique visitors today": "Khách truy cập duy nhất hôm nay",
+    "API calls today": "Lượt gọi API hôm nay"
   }
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/ipgeo"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/i18n"
@@ -353,6 +354,9 @@ func InitResources() error {
 	}
 
 	perfmetrics.Init()
+
+	// 载入离线 IP 地区库（用于统计看板的地区分布，缺失时降级为未知）
+	ipgeo.Init()
 
 	// 启动系统监控
 	common.StartSystemMonitor()

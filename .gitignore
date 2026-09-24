@@ -29,7 +29,8 @@ tiktoken_cache
 
 electron/node_modules
 electron/dist
-/data/
+/data/*
+!/data/ip2region.xdb
 .gomodcache/
 .gocache-temp
 .gopath

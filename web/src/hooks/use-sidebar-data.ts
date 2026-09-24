@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity,
   Box,
+  ChartColumnBig,
   ClipboardCheck,
   ClipboardList,
   CreditCard,
@@ -139,6 +140,11 @@ export function useSidebarData(): SidebarData {
         id: 'admin',
         title: t('Admin'),
         items: [
+          {
+            title: t('Statistics'),
+            url: '/statistics',
+            icon: ChartColumnBig,
+          },
           {
             title: t('Channels'),
             url: '/channels',

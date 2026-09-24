@@ -35,6 +35,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.Han
 				controller.RelayNotFound(c)
 				return
 			}
+			middleware.RecordWebVisit(c)
 			c.Header("Cache-Control", "no-cache")
 			c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
 		},

@@ -103,6 +103,21 @@ func createLog(log *Log) error {
 	return LOG_DB.Create(log).Error
 }
 
+// CountConsumeLogs 统计 [startTimestamp, endTimestamp] 内的对话接口调用总次数（按次，非去重）。
+// 时间戳为 0 时不施加对应边界。
+func CountConsumeLogs(startTimestamp, endTimestamp int64) (int64, error) {
+	var count int64
+	tx := LOG_DB.Model(&Log{}).Where("type = ?", LogTypeConsume)
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	err := tx.Count(&count).Error
+	return count, err
+}
+
 func clickHouseLogOrder(prefix string) string {
 	return prefix + "created_at desc, " + prefix + "request_id desc"
 }
@@ -383,6 +398,8 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
+	// 记录日活：当天该用户首次调用对话接口时记一次（按用户去重）。
+	RecordDailyActive(StatKindCall, fmt.Sprintf("u%d", userId), userId, "")
 	if common.DataExportEnabled {
 		LogQuotaData(QuotaDataLogParams{
 			UserID:    userId,

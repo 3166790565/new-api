@@ -6928,6 +6928,20 @@
     "Max pending submissions per user": "Max pending submissions per user",
     "0 means no limit.": "0 means no limit.",
     "Current share": "Current share",
-    "Reveal the saved key for this channel.": "Reveal the saved key for this channel."
+    "Reveal the saved key for this channel.": "Reveal the saved key for this channel.",
+    "Statistics": "統計",
+    "Active Users": "日活使用者",
+    "Registrations": "註冊人數",
+    "Logins": "登入人數",
+    "Visitors": "造訪人數",
+    "Call Count": "呼叫次數",
+    "Recent Trend": "近期趨勢",
+    "IP Region Distribution": "IP 地區分布",
+    "Last {{count}} days": "近 {{count}} 天",
+    "Unique callers today": "今日去重呼叫人數",
+    "New sign-ups today": "今日新註冊",
+    "Users logged in today": "今日登入使用者",
+    "Unique visitors today": "今日去重訪客",
+    "API calls today": "今日介面呼叫次數"
   }
 }

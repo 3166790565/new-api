@@ -36,6 +36,9 @@ RUN apt-get update \
 
 COPY --from=builder2 /build/new-api /
 COPY LICENSE NOTICE THIRD-PARTY-LICENSES.md /licenses/
+# 离线 IP 地区库放在 /data 卷之外，避免被挂载的持久化卷遮蔽；用绝对路径显式指向它。
+COPY data/ip2region.xdb /opt/new-api/data/ip2region.xdb
+ENV IP2REGION_XDB_PATH=/opt/new-api/data/ip2region.xdb
 EXPOSE 3000
 WORKDIR /data
 ENTRYPOINT ["/new-api"]

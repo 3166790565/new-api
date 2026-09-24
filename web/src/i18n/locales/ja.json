@@ -6928,6 +6928,20 @@
     "Max pending submissions per user": "Max pending submissions per user",
     "0 means no limit.": "0 means no limit.",
     "Current share": "Current share",
-    "Reveal the saved key for this channel.": "Reveal the saved key for this channel."
+    "Reveal the saved key for this channel.": "Reveal the saved key for this channel.",
+    "Statistics": "統計",
+    "Active Users": "アクティブユーザー",
+    "Registrations": "登録数",
+    "Logins": "ログイン数",
+    "Visitors": "訪問者数",
+    "Call Count": "呼び出し回数",
+    "Recent Trend": "最近の傾向",
+    "IP Region Distribution": "IP地域分布",
+    "Last {{count}} days": "直近{{count}}日間",
+    "Unique callers today": "本日のユニーク呼び出しユーザー",
+    "New sign-ups today": "本日の新規登録",
+    "Users logged in today": "本日ログインしたユーザー",
+    "Unique visitors today": "本日のユニーク訪問者",
+    "API calls today": "本日のAPI呼び出し回数"
   }
 }

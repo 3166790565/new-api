@@ -374,6 +374,7 @@ func migrateDB() error {
 		&ChannelContribution{},
 		&ChannelContributionModel{},
 		&ContributionEarning{},
+		&StatDailyActive{},
 	)
 	if err != nil {
 		return err

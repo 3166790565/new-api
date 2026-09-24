@@ -6928,6 +6928,20 @@
     "Max pending submissions per user": "Max pending submissions per user",
     "0 means no limit.": "0 means no limit.",
     "Current share": "Current share",
-    "Reveal the saved key for this channel.": "Reveal the saved key for this channel."
+    "Reveal the saved key for this channel.": "Reveal the saved key for this channel.",
+    "Statistics": "Statistiques",
+    "Active Users": "Utilisateurs actifs",
+    "Registrations": "Inscriptions",
+    "Logins": "Connexions",
+    "Visitors": "Visiteurs",
+    "Call Count": "Nombre d'appels",
+    "Recent Trend": "Tendance récente",
+    "IP Region Distribution": "Répartition par région IP",
+    "Last {{count}} days": "{{count}} derniers jours",
+    "Unique callers today": "Appelants uniques aujourd'hui",
+    "New sign-ups today": "Nouvelles inscriptions aujourd'hui",
+    "Users logged in today": "Utilisateurs connectés aujourd'hui",
+    "Unique visitors today": "Visiteurs uniques aujourd'hui",
+    "API calls today": "Appels API aujourd'hui"
   }
 }

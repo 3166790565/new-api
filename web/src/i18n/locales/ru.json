@@ -6928,6 +6928,20 @@
     "Max pending submissions per user": "Max pending submissions per user",
     "0 means no limit.": "0 means no limit.",
     "Current share": "Current share",
-    "Reveal the saved key for this channel.": "Reveal the saved key for this channel."
+    "Reveal the saved key for this channel.": "Reveal the saved key for this channel.",
+    "Statistics": "Статистика",
+    "Active Users": "Активные пользователи",
+    "Registrations": "Регистрации",
+    "Logins": "Входы",
+    "Visitors": "Посетители",
+    "Call Count": "Количество вызовов",
+    "Recent Trend": "Недавняя динамика",
+    "IP Region Distribution": "Распределение по регионам IP",
+    "Last {{count}} days": "Последние {{count}} дн.",
+    "Unique callers today": "Уникальные вызывающие сегодня",
+    "New sign-ups today": "Новые регистрации сегодня",
+    "Users logged in today": "Пользователи, вошедшие сегодня",
+    "Unique visitors today": "Уникальные посетители сегодня",
+    "API calls today": "Вызовы API сегодня"
   }
 }

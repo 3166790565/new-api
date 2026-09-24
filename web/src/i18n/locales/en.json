@@ -6928,6 +6928,20 @@
     "Max pending submissions per user": "Max pending submissions per user",
     "0 means no limit.": "0 means no limit.",
     "Current share": "Current share",
-    "Reveal the saved key for this channel.": "Reveal the saved key for this channel."
+    "Reveal the saved key for this channel.": "Reveal the saved key for this channel.",
+    "Statistics": "Statistics",
+    "Active Users": "Active Users",
+    "Registrations": "Registrations",
+    "Logins": "Logins",
+    "Visitors": "Visitors",
+    "Call Count": "Call Count",
+    "Recent Trend": "Recent Trend",
+    "IP Region Distribution": "IP Region Distribution",
+    "Last {{count}} days": "Last {{count}} days",
+    "Unique callers today": "Unique callers today",
+    "New sign-ups today": "New sign-ups today",
+    "Users logged in today": "Users logged in today",
+    "Unique visitors today": "Unique visitors today",
+    "API calls today": "API calls today"
   }
 }

@@ -6928,6 +6928,20 @@
     "Max pending submissions per user": "每用户最大待审提交数",
     "0 means no limit.": "0 表示不限制。",
     "Current share": "当前分成比例",
-    "Reveal the saved key for this channel.": "查看该渠道已保存的密钥。"
+    "Reveal the saved key for this channel.": "查看该渠道已保存的密钥。",
+    "Statistics": "统计",
+    "Active Users": "日活用户",
+    "Registrations": "注册人数",
+    "Logins": "登录人数",
+    "Visitors": "访问人数",
+    "Call Count": "调用次数",
+    "Recent Trend": "近期趋势",
+    "IP Region Distribution": "IP 地区分布",
+    "Last {{count}} days": "近 {{count}} 天",
+    "Unique callers today": "今日去重调用人数",
+    "New sign-ups today": "今日新注册",
+    "Users logged in today": "今日登录用户",
+    "Unique visitors today": "今日去重访客",
+    "API calls today": "今日接口调用次数"
   }
 }
