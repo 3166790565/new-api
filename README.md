@@ -34,6 +34,24 @@
 - 前端开关位于 `web/src/features/system-settings/maintenance/log-settings-section.tsx`，并已补齐各语言 i18n 文案；
 - 默认值为 `true`，以保证升级后行为不变。
 
+### 3. 注册码（`RegistrationCodeEnabled`）
+
+新增注册码（准入码）能力，由管理员控制**前台用户注册时是否需要提供注册码**：
+
+- 开关**关闭**（默认）：保持原有行为，任何人都可正常注册。
+- 开关**开启**：用户在密码注册 / OAuth 首次建号时，必须持有有效的注册码才能创建账号；注册码本身不携带额度、分组等任何权益，只决定能否建号。
+
+注册码由管理员在后台管理，支持：
+
+- 批量生成或手动录入自定义码，可配置字符集（数字 / 大写 / 混合）、码长、前缀 / 后缀、排除易混字符；
+- 每个码可设置启用 / 停用状态、最大使用次数（0 表示不限）、过期时间（0 表示不过期），并记录已用次数与最近使用时间。
+
+实现要点：
+
+- 后端模型与校验位于 `model/registration_code.go`，注册准入校验在 `controller/`（`registration_code.go` / `user.go` / `oauth.go` 等）落地，选项接线于 `common/constants.go` 与 `model/option.go`；
+- 管理页面位于 `web/src/features/registration-codes/`（路由 `/registration-codes`），开关集成在管理后台 →「认证设置」的基础认证区块；
+- 默认值为 `false`，以保证升级后行为不变（默认不强制注册码）。
+
 ## 许可与归属
 
 本仓库遵循原项目的开源许可协议，项目名称、品牌与作者归属（New API / QuantumNous）均保留自上游原项目。
