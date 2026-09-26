@@ -19,9 +19,9 @@ func TestResolveRegionDegradesGracefully(t *testing.T) {
 	assert.Equal(t, "", normalizeRegion(""))
 }
 
-// normalizeRegion 中国取省份，海外取国家。
+// normalizeRegion 中国带省份返回「中国·省份」、无省份返回中国，海外取国家。
 func TestNormalizeRegion(t *testing.T) {
-	assert.Equal(t, "广东省", normalizeRegion("中国|0|广东省|深圳市|电信"))
+	assert.Equal(t, "中国·广东省", normalizeRegion("中国|0|广东省|深圳市|电信"))
 	assert.Equal(t, "中国", normalizeRegion("中国|0|0|0|0"))
 	assert.Equal(t, "美国", normalizeRegion("美国|0|0|0|0"))
 	assert.Equal(t, "日本", normalizeRegion("日本|0|东京都|0|0"))

@@ -77,7 +77,7 @@ func load() {
 	common.SysLog("ip2region xdb loaded from " + path + " (" + version.Name + ")")
 }
 
-// ResolveRegion 把 IP 解析为可读地区（中国返回省份，其余返回国家）。
+// ResolveRegion 把 IP 解析为可读地区（中国返回「中国·省份」，其余返回国家）。
 // 未加载数据、无法解析或 IP 版本不匹配时返回空字符串。
 func ResolveRegion(ip string) string {
 	Init()
@@ -101,6 +101,7 @@ func ResolveRegion(ip string) string {
 }
 
 // normalizeRegion 解析 ip2region 的 "国家|区域|省份|城市|ISP" 结构，取有意义的地区名。
+// 中国带省份时返回「中国·省份」（如 中国·广东省），无省份时返回「中国」；海外返回国家名。
 func normalizeRegion(raw string) string {
 	parts := strings.Split(raw, "|")
 	field := func(i int) string {
@@ -116,9 +117,9 @@ func normalizeRegion(raw string) string {
 	province := field(2)
 	if country == "中国" || strings.EqualFold(country, "China") {
 		if province != "" {
-			return province
+			return "中国·" + province
 		}
-		return country
+		return "中国"
 	}
 	if country != "" {
 		return country
